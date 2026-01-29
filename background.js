@@ -167,9 +167,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         testRuns.push({ key, resultsCount: Array.isArray(results) ? results.length : 0 });
       }
       let storageBytesUsed = 0;
-      try {
+      if (typeof chrome.storage.local.getBytesInUse === 'function') {
         storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache"]);
-      } catch (e) { /* ignore */ }
+      }
       sendResponse({
         testRuns,
         testRunCacheSize: testRunCache.size,
