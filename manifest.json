@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "R-Helper",
+  "version": "1.2.0",
+  "description": "Preview Zephyr Scale test results directly on Confluence pages",
+  "permissions": ["activeTab", "downloads", "storage", "unlimitedStorage"],
+  "host_permissions": [
+    "*://jira.example.ru/*",
+    "*://life.example.ru/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://life.example.ru/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.css"],
+      "matches": ["*://life.example.ru/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}
