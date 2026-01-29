@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="rhelper-popup-header">
+    <img src="icons/icon48.png" alt="" class="rhelper-popup-logo">
+    <div>
+      <div class="rhelper-popup-title" id="extName">R-Helper</div>
+      <div class="rhelper-popup-version" id="extVersion"></div>
+    </div>
+  </div>
+
+  <div class="rhelper-popup-stats">
+    <div class="rhelper-popup-stat-row">
+      <span class="rhelper-popup-stat-label">Прогоны в кэше</span>
+      <span class="rhelper-popup-stat-value" id="testRunCount">—</span>
+    </div>
+    <div class="rhelper-popup-stat-row">
+      <span class="rhelper-popup-stat-label">Вложения в кэше</span>
+      <span class="rhelper-popup-stat-value" id="attachmentsCount">—</span>
+    </div>
+    <div class="rhelper-popup-stat-row">
+      <span class="rhelper-popup-stat-label">Активные запросы</span>
+      <span class="rhelper-popup-stat-value" id="inFlightCount">—</span>
+    </div>
+    <div class="rhelper-popup-stat-row">
+      <span class="rhelper-popup-stat-label">Размер кэша</span>
+      <span class="rhelper-popup-stat-value" id="storageSize">—</span>
+    </div>
+  </div>
+
+  <div id="testRunList" class="rhelper-popup-list" hidden>
+    <div class="rhelper-popup-list-title">Закэшированные прогоны</div>
+    <ul id="testRunItems"></ul>
+  </div>
+
+  <div id="emptyMessage" class="rhelper-popup-empty" hidden>Кэш пуст</div>
+
+  <button id="prefetchBtn" class="rhelper-popup-prefetch-btn">Закэшировать прогоны страницы</button>
+
+  <button id="clearBtn" class="rhelper-popup-clear-btn">Очистить кэш</button>
+
+  <button id="logBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">История кэша</button>
+
+  <div id="logSection" class="rhelper-popup-log" hidden>
+    <div id="logContent" class="rhelper-popup-log-content"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

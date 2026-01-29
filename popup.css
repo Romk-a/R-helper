@@ -1,0 +1,323 @@
+body {
+  width: 320px;
+  margin: 0;
+  padding: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 13px;
+  color: #172b4d;
+  background: #fff;
+}
+
+.rhelper-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.rhelper-popup-logo {
+  width: 32px;
+  height: 32px;
+}
+
+.rhelper-popup-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rhelper-popup-version {
+  font-size: 11px;
+  color: #6b778c;
+}
+
+.rhelper-popup-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.rhelper-popup-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.rhelper-popup-stat-label {
+  color: #6b778c;
+}
+
+.rhelper-popup-stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rhelper-popup-list {
+  margin-bottom: 12px;
+}
+
+.rhelper-popup-list-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b778c;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+
+.rhelper-popup-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+}
+
+.rhelper-popup-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.rhelper-popup-list li:last-child {
+  border-bottom: none;
+}
+
+.rhelper-popup-run-key {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.rhelper-popup-run-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rhelper-popup-run-count {
+  color: #6b778c;
+  font-size: 12px;
+}
+
+.rhelper-popup-run-delete {
+  border: none;
+  background: none;
+  color: #999;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  transition: color 0.15s;
+}
+
+.rhelper-popup-run-delete:hover {
+  color: #de350b;
+}
+
+.rhelper-popup-run-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rhelper-popup-empty {
+  text-align: center;
+  color: #6b778c;
+  padding: 16px 0;
+  font-style: italic;
+}
+
+.rhelper-popup-prefetch-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  border: 1px solid #0052cc;
+  border-radius: 4px;
+  background: #0052cc;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 8px;
+}
+
+.rhelper-popup-prefetch-btn:hover {
+  background: #0047b3;
+  border-color: #0047b3;
+}
+
+.rhelper-popup-prefetch-btn:active {
+  background: #003d99;
+  border-color: #003d99;
+}
+
+.rhelper-popup-prefetch-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rhelper-popup-clear-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #172b4d;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rhelper-popup-clear-btn:hover {
+  background: #f0f0f0;
+}
+
+.rhelper-popup-clear-btn:active {
+  background: #e5e5e5;
+}
+
+.rhelper-popup-clear-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rhelper-popup-log {
+  margin-top: 8px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.rhelper-popup-log-content {
+  padding: 6px 8px;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.rhelper-popup-log-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rhelper-popup-log-time {
+  color: #6b778c;
+}
+
+.rhelper-popup-log-action {
+  font-weight: 600;
+  color: #0052cc;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+
+  .rhelper-popup-header {
+    border-bottom-color: #333;
+  }
+
+  .rhelper-popup-version {
+    color: #999;
+  }
+
+  .rhelper-popup-stat-row {
+    background: #2a2a2a;
+  }
+
+  .rhelper-popup-stat-label {
+    color: #999;
+  }
+
+  .rhelper-popup-list-title {
+    color: #999;
+  }
+
+  .rhelper-popup-list ul {
+    border-color: #333;
+  }
+
+  .rhelper-popup-list li {
+    border-bottom-color: #333;
+  }
+
+  .rhelper-popup-run-count {
+    color: #999;
+  }
+
+  .rhelper-popup-run-delete {
+    color: #666;
+  }
+
+  .rhelper-popup-run-delete:hover {
+    color: #ff6b6b;
+  }
+
+  .rhelper-popup-empty {
+    color: #999;
+  }
+
+  .rhelper-popup-prefetch-btn {
+    background: #1a6dcc;
+    border-color: #1a6dcc;
+  }
+
+  .rhelper-popup-prefetch-btn:hover {
+    background: #1560b3;
+    border-color: #1560b3;
+  }
+
+  .rhelper-popup-prefetch-btn:active {
+    background: #0f4f99;
+    border-color: #0f4f99;
+  }
+
+  .rhelper-popup-clear-btn {
+    background: #2a2a2a;
+    border-color: #333;
+    color: #e0e0e0;
+  }
+
+  .rhelper-popup-clear-btn:hover {
+    background: #333;
+  }
+
+  .rhelper-popup-clear-btn:active {
+    background: #444;
+  }
+
+  .rhelper-popup-log {
+    border-color: #333;
+  }
+
+  .rhelper-popup-log-content {
+    color: #ccc;
+  }
+
+  .rhelper-popup-log-entry {
+    border-bottom-color: #2a2a2a;
+  }
+
+  .rhelper-popup-log-time {
+    color: #999;
+  }
+
+  .rhelper-popup-log-action {
+    color: #79b8ff;
+  }
+}
