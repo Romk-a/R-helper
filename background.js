@@ -4,6 +4,7 @@ const CACHE_TTL = 15 * 24 * 60 * 60 * 1000; // 15 дней
 const testRunCache = new Map();
 const attachmentsCache = new Map();
 const inFlightResults = new Map();
+let cachedCurrentUser = null;
 
 const cacheLog = [];
 const CACHE_LOG_MAX = 500;
@@ -44,7 +45,7 @@ async function persistCache(name, map) {
 
 async function restoreCaches() {
   try {
-    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache"]);
+    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "currentUser"]);
     if (data.testRunCache || data.attachmentsCache) {
       const now = Date.now();
       let expired = 0;
@@ -65,6 +66,9 @@ async function restoreCaches() {
             expired++;
           }
         }
+      }
+      if (data.currentUser && data.currentUser.ts && now - data.currentUser.ts <= CACHE_TTL) {
+        cachedCurrentUser = data.currentUser.data;
       }
       logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", expired: " + expired);
       if (expired > 0) {
@@ -158,6 +162,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "getCurrentUser") {
+    handleGetCurrentUser()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.action === "getCacheStatus") {
     cacheReady.then(async () => {
       const manifest = chrome.runtime.getManifest();
@@ -216,12 +227,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size);
       testRunCache.clear();
       attachmentsCache.clear();
-      chrome.storage.local.remove(["testRunCache", "attachmentsCache"]);
+      cachedCurrentUser = null;
+      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "currentUser"]);
       sendResponse({ success: true });
     });
     return true;
   }
 });
+
+async function handleGetCurrentUser() {
+  if (cachedCurrentUser) return cachedCurrentUser;
+  const resp = await fetch(JIRA_BASE + "/rest/api/2/myself", { credentials: "include" });
+  if (!resp.ok) throw new Error("Failed to fetch current user: " + resp.status);
+  const data = await resp.json();
+  cachedCurrentUser = { name: data.name };
+  await chrome.storage.local.set({ currentUser: { data: cachedCurrentUser, ts: Date.now() } });
+  return cachedCurrentUser;
+}
 
 async function handleGetTestResult(testRunKey, testCaseKey, includeAttachments) {
   const results = await fetchTestRunResults(testRunKey);

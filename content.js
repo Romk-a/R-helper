@@ -11,6 +11,11 @@
   let hoverTimeout = null;
   let tooltipRequestId = 0;
   let currentPopup = null;
+  let currentColorPalette = null;
+  let currentPaletteCell = null;
+  let currentHighlightedCell = null;
+  let highlightOverlay = null;
+  let currentUserName = null;
 
   // ===== Utility =====
 
@@ -145,6 +150,55 @@
     });
   }
 
+  async function ensureCurrentUser() {
+    if (currentUserName) return currentUserName;
+    const resp = await sendMessage({ action: "getCurrentUser" });
+    if (resp && !resp.error && resp.name) {
+      currentUserName = resp.name;
+    }
+    return currentUserName;
+  }
+
+  function ensureHighlightOverlay() {
+    if (highlightOverlay) return highlightOverlay;
+    const el = document.createElement("div");
+    el.className = "rhelper-highlight-overlay";
+    el.style.display = "none";
+    document.body.appendChild(el);
+    highlightOverlay = el;
+    return el;
+  }
+
+  function positionHighlightOverlay(cell) {
+    const overlay = ensureHighlightOverlay();
+    const rect = cell.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.top;
+
+    const ownerDoc = cell.ownerDocument;
+    if (ownerDoc !== document) {
+      const iframe = findIframeFor(ownerDoc);
+      if (iframe) {
+        const iframeRect = iframe.getBoundingClientRect();
+        left += iframeRect.left;
+        top += iframeRect.top;
+      }
+    }
+
+    overlay.style.left = (left + window.scrollX) + "px";
+    overlay.style.top = (top + window.scrollY) + "px";
+    overlay.style.width = rect.width + "px";
+    overlay.style.height = rect.height + "px";
+    overlay.style.display = "block";
+  }
+
+  function clearCellHighlight() {
+    if (highlightOverlay) {
+      highlightOverlay.style.display = "none";
+    }
+    currentHighlightedCell = null;
+  }
+
   // ===== Tooltip =====
 
   function removeTooltip() {
@@ -267,12 +321,19 @@
         }
       }
 
+      const painterClass = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
+      const painter = painterClass ? painterClass.substring("rhelper-painter-".length) : "";
+      const painterHtml = painter && !cell.hasAttribute("title") && cell.hasAttribute("data-highlight-colour")
+        ? `<span class="rhelper-tooltip-painter">${painter}</span>`
+        : "";
+
       const vmNames = resp.comment ? extractVmNames(resp.comment) : [];
       const vmHtml = vmNames.length > 0
         ? vmNames.map(n => `<span class="rhelper-tooltip-vm">${n}</span>`).join("")
         : "";
 
       tooltip.innerHTML =
+        painterHtml +
         vmHtml +
         (commentPreview ? `<div class="rhelper-tooltip-comment">${commentPreview}</div>` : "");
 
@@ -332,6 +393,7 @@
   function showPopup(cell) {
     removePopup();
     removeTooltip();
+    clearCellHighlight();
 
     const keys = getKeysFromCell(cell);
     if (!keys) return;
@@ -536,13 +598,131 @@
     }
   }
 
+  // ===== Color Palette =====
+
+  const PALETTE_COLORS = [
+    { color: "#ff8f73", title: "Умеренный красный 65 %" },
+    { color: "#ffe380", title: "Умеренный жёлтый 45 %" },
+    { color: "#79f2c0", title: "Умеренный зелёный 45 %" },
+    { color: "#4c9aff", title: "Умеренный синий 65 %" },
+    { color: "#998dd9", title: "Умеренный багровый 65 %" },
+    { color: "#c1c7d0", title: "Умеренный серый 45 %" },
+  ];
+
+  function applyHighlight(cell, color, title) {
+    for (const cls of [...cell.classList]) {
+      if (cls.startsWith("highlight-") || cls.startsWith("rhelper-painter-")) cell.classList.remove(cls);
+    }
+    cell.classList.add("highlight-" + color);
+    cell.setAttribute("data-highlight-colour", color);
+    cell.removeAttribute("title");
+    if (currentUserName) {
+      cell.classList.add("rhelper-painter-" + currentUserName);
+    }
+  }
+
+  function removeHighlight(cell) {
+    for (const cls of [...cell.classList]) {
+      if (cls.startsWith("highlight-") || cls.startsWith("rhelper-painter-")) cell.classList.remove(cls);
+    }
+    cell.removeAttribute("data-highlight-colour");
+    cell.removeAttribute("title");
+  }
+
+  function removeColorPalette() {
+    if (currentColorPalette) {
+      if (currentColorPalette._outsideListener) {
+        document.removeEventListener("mousedown", currentColorPalette._outsideListener);
+        if (currentColorPalette._cellDoc) {
+          currentColorPalette._cellDoc.removeEventListener("mousedown", currentColorPalette._outsideListener);
+        }
+      }
+      currentColorPalette.remove();
+      currentColorPalette = null;
+      currentPaletteCell = null;
+    }
+  }
+
+  async function showColorPalette(cell, e) {
+    removeColorPalette();
+    removeTooltip();
+    clearCellHighlight();
+    await ensureCurrentUser();
+
+    const palette = document.createElement("div");
+    palette.className = "rhelper-color-palette";
+
+    PALETTE_COLORS.forEach(({ color, title }) => {
+      const swatch = document.createElement("div");
+      swatch.className = "rhelper-color-swatch";
+      swatch.style.backgroundColor = color;
+      swatch.dataset.color = color;
+      swatch.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        applyHighlight(cell, color, title);
+        removeColorPalette();
+      });
+      palette.appendChild(swatch);
+    });
+
+    const removeSwatch = document.createElement("div");
+    removeSwatch.className = "rhelper-color-swatch rhelper-color-remove";
+    removeSwatch.title = "Убрать заливку";
+    removeSwatch.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      removeHighlight(cell);
+      removeColorPalette();
+    });
+    palette.appendChild(removeSwatch);
+
+    // Position above and slightly left of the cell
+    const rect = cell.getBoundingClientRect();
+    let left = rect.left - 4;
+    let top = rect.top;
+
+    const ownerDoc = cell.ownerDocument;
+    if (ownerDoc !== document) {
+      const iframe = findIframeFor(ownerDoc);
+      if (iframe) {
+        const iframeRect = iframe.getBoundingClientRect();
+        left += iframeRect.left;
+        top += iframeRect.top;
+      }
+    }
+
+    document.body.appendChild(palette);
+    currentColorPalette = palette;
+    currentPaletteCell = cell;
+
+    const paletteHeight = palette.offsetHeight;
+    palette.style.left = (left + window.scrollX) + "px";
+    palette.style.top = (top + window.scrollY - paletteHeight - 4) + "px";
+
+    // Close on click outside
+    const cellDoc = cell.ownerDocument;
+    const outsideListener = (ev) => {
+      if (!palette.contains(ev.target) && !cell.contains(ev.target)) {
+        removeColorPalette();
+      }
+    };
+    palette._outsideListener = outsideListener;
+    palette._cellDoc = cellDoc !== document ? cellDoc : null;
+    setTimeout(() => {
+      document.addEventListener("mousedown", outsideListener);
+      if (cellDoc !== document) {
+        cellDoc.addEventListener("mousedown", outsideListener);
+      }
+    }, 0);
+  }
+
   // ===== Event handling =====
 
   function handleMouseOver(e) {
     const cell = e.target.closest("td, th");
     if (!cell || !isTestCaseCell(cell)) return;
 
-    cell.classList.add("rhelper-highlight");
+    currentHighlightedCell = cell;
+    positionHighlightOverlay(cell);
 
     if (hoverTimeout) { clearTimeout(hoverTimeout); hoverTimeout = null; }
     hoverTimeout = setTimeout(() => {
@@ -552,8 +732,8 @@
 
   function handleMouseOut(e) {
     const cell = e.target.closest("td, th");
-    if (cell) {
-      cell.classList.remove("rhelper-highlight");
+    if (cell && currentHighlightedCell === cell) {
+      clearCellHighlight();
     }
     // Don't hide if mouse is moving to/within the tooltip
     if (currentTooltip && currentTooltip.contains(e.relatedTarget)) return;
@@ -578,10 +758,25 @@
 
   function handleClick(e) {
     const cell = e.target.closest("td, th");
-    if (!cell || !isTestCaseCell(cell)) return;
+    if (!cell || !isTestCaseCell(cell)) {
+      clearCellHighlight();
+      removeColorPalette();
+      return;
+    }
 
-    // В редакторе — только по Ctrl/Cmd+Click
-    if (isEditorContext(cell) && !e.ctrlKey && !e.metaKey) return;
+    if (isEditorContext(cell)) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        showPopup(cell);
+      } else if (currentColorPalette && currentPaletteCell === cell) {
+        removeColorPalette();
+        showTooltip(cell, e);
+      } else {
+        showColorPalette(cell, e);
+      }
+      return;
+    }
 
     e.preventDefault();
     e.stopPropagation();
@@ -590,7 +785,9 @@
 
   function handleKeyDown(e) {
     if (e.key === "Escape") {
-      if (currentLightbox) {
+      if (currentColorPalette) {
+        removeColorPalette();
+      } else if (currentLightbox) {
         removeLightbox();
       } else {
         removePopup();
