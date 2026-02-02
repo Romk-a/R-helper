@@ -27,6 +27,16 @@
 
     document.getElementById("extName").textContent = resp.name;
     document.getElementById("extVersion").textContent = "v" + resp.version;
+
+    const banner = document.getElementById("notConfiguredBanner");
+    const mainContent = document.getElementById("mainContent");
+    if (!resp.configured) {
+      banner.hidden = false;
+      mainContent.hidden = true;
+      return;
+    }
+    banner.hidden = true;
+    mainContent.hidden = false;
     document.getElementById("testRunCount").textContent = resp.testRunCacheSize;
     document.getElementById("attachmentsCount").textContent = resp.attachmentsCacheSize;
     document.getElementById("inFlightCount").textContent = resp.inFlightCount;
@@ -183,6 +193,16 @@
       entry.appendChild(document.createTextNode(" " + e.details));
       logContent.appendChild(entry);
     }
+  });
+
+  // ===== Settings buttons =====
+
+  document.getElementById("openSettingsFromBanner").addEventListener("click", () => {
+    chrome.runtime.openOptionsPage();
+  });
+
+  document.getElementById("settingsBtn").addEventListener("click", () => {
+    chrome.runtime.openOptionsPage();
   });
 
   loadStatus();

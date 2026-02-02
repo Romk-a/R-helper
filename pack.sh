@@ -22,6 +22,9 @@ SHARED_FILES=(
     popup.html
     popup.js
     popup.css
+    options.html
+    options.js
+    options.css
     icons
 )
 
@@ -63,26 +66,22 @@ if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
     exit 1
 fi
 
-FIREFOX_OUTPUT="${EXTENSION_NAME}-${VERSION}.xpi"
+FIREFOX_OUTPUT="${EXTENSION_NAME}-${VERSION}-firefox.zip"
 rm -f "$FIREFOX_OUTPUT"
+
+# Сохраняем локальную копию zip для архива
+(cd "$FIREFOX_DIR" && zip -r "$SCRIPT_DIR/$FIREFOX_OUTPUT" .)
 
 npx --yes web-ext sign \
     --source-dir="$FIREFOX_DIR" \
     --artifacts-dir="$TMPDIR_BASE/artifacts" \
     --api-key="$AMO_JWT_ISSUER" \
     --api-secret="$AMO_JWT_SECRET" \
-    --channel=unlisted
+    --channel=listed
 
-# web-ext sign создаёт файл с непредсказуемым именем — находим его
-SIGNED_XPI=$(find "$TMPDIR_BASE/artifacts" -name "*.xpi" | head -1)
-if [ -z "$SIGNED_XPI" ]; then
-    echo "ОШИБКА: подписанный .xpi не найден"
-    exit 1
-fi
-
-cp "$SIGNED_XPI" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
-echo "Создан: $FIREFOX_OUTPUT (подписан Mozilla)"
+echo "Firefox: версия $VERSION загружена на AMO (ожидает проверки)"
 
 echo ""
 echo "Результат:"
 ls -lh "$SCRIPT_DIR/$CHROME_OUTPUT" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
+echo "Firefox listed-версия загружена на AMO и ожидает проверки."

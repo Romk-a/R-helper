@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>R-Helper — Настройки</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="rhelper-options-container">
+    <div class="rhelper-options-header">
+      <img src="icons/icon48.png" alt="" class="rhelper-options-logo">
+      <div>
+        <div class="rhelper-options-title">R-Helper</div>
+        <div class="rhelper-options-subtitle">Настройки расширения</div>
+      </div>
+    </div>
+
+    <div class="rhelper-options-section">
+      <label class="rhelper-options-label" for="jiraUrl">Jira URL</label>
+      <input type="text" id="jiraUrl" class="rhelper-options-input" placeholder="https://jira.example.com">
+      <div class="rhelper-options-hint">Базовый URL Jira (без / на конце)</div>
+    </div>
+
+    <div class="rhelper-options-section">
+      <label class="rhelper-options-label" for="confluenceUrl">Confluence URL</label>
+      <input type="text" id="confluenceUrl" class="rhelper-options-input" placeholder="https://wiki.example.com">
+      <div class="rhelper-options-hint">Базовый URL Confluence (без / на конце)</div>
+    </div>
+
+    <div class="rhelper-options-section">
+      <label class="rhelper-options-label" for="testCasePrefix">Префикс тест-кейсов</label>
+      <input type="text" id="testCasePrefix" class="rhelper-options-input" placeholder="Project-T">
+      <div class="rhelper-options-hint">Префикс ключа тест-кейса (например Project-T для Project-T12345)</div>
+    </div>
+
+    <div class="rhelper-options-section">
+      <label class="rhelper-options-label" for="testRunPrefix">Префикс прогонов</label>
+      <input type="text" id="testRunPrefix" class="rhelper-options-input" placeholder="Project-C">
+      <div class="rhelper-options-hint">Префикс ключа прогона (например Project-C для Project-C12345)</div>
+    </div>
+
+    <div id="statusMessage" class="rhelper-options-status" hidden></div>
+
+    <div class="rhelper-options-buttons">
+      <button id="saveBtn" class="rhelper-options-btn rhelper-options-btn-primary">Сохранить</button>
+      <button id="testBtn" class="rhelper-options-btn rhelper-options-btn-secondary">Проверить подключение</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

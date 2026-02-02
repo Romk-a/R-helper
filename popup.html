@@ -13,6 +13,12 @@
     </div>
   </div>
 
+  <div id="notConfiguredBanner" class="rhelper-popup-not-configured" hidden>
+    <div class="rhelper-popup-not-configured-text">Расширение не настроено</div>
+    <button id="openSettingsFromBanner" class="rhelper-popup-prefetch-btn">Настроить</button>
+  </div>
+
+  <div id="mainContent">
   <div class="rhelper-popup-stats">
     <div class="rhelper-popup-stat-row">
       <span class="rhelper-popup-stat-label">Прогоны в кэше</span>
@@ -47,6 +53,9 @@
 
   <div id="logSection" class="rhelper-popup-log" hidden>
     <div id="logContent" class="rhelper-popup-log-content"></div>
+  </div>
+
+  <button id="settingsBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Настройки</button>
   </div>
 
   <script src="popup.js"></script>

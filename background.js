@@ -1,4 +1,4 @@
-const JIRA_BASE = "https://jira.example.ru";
+let JIRA_BASE = "";
 const CACHE_TTL = 15 * 24 * 60 * 60 * 1000; // 15 дней
 
 const testRunCache = new Map();
@@ -8,6 +8,8 @@ let cachedCurrentUser = null;
 
 const cacheLog = [];
 const CACHE_LOG_MAX = 500;
+
+const CONTENT_SCRIPT_ID = "rhelper-content-script";
 
 function logCache(action, details) {
   cacheLog.push({ ts: Date.now(), action, details });
@@ -83,9 +85,63 @@ async function restoreCaches() {
   }
 }
 
-const cacheReady = restoreCaches();
+async function loadSettings() {
+  const data = await chrome.storage.local.get("settings");
+  if (data.settings && data.settings.jiraUrl) {
+    JIRA_BASE = data.settings.jiraUrl;
+    logCache("SETTINGS", "jiraUrl=" + JIRA_BASE);
+    await registerContentScript(data.settings.confluenceUrl);
+  } else {
+    JIRA_BASE = "";
+    logCache("SETTINGS", "not configured");
+  }
+}
+
+async function registerContentScript(confluenceUrl) {
+  if (!confluenceUrl) return;
+
+  let matchPattern;
+  try {
+    const url = new URL(confluenceUrl);
+    matchPattern = url.origin + "/*";
+  } catch (e) {
+    logCache("REGISTER_ERR", "bad confluenceUrl: " + e.message);
+    return;
+  }
+
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+  } catch (e) {
+    // not registered yet — that's fine
+  }
+
+  try {
+    await chrome.scripting.registerContentScripts([{
+      id: CONTENT_SCRIPT_ID,
+      matches: [matchPattern],
+      js: ["content.js"],
+      css: ["content.css"],
+      allFrames: true,
+      persistAcrossSessions: true,
+      runAt: "document_idle",
+    }]);
+    logCache("REGISTER", "content script for " + matchPattern);
+  } catch (e) {
+    logCache("REGISTER_ERR", e.message);
+  }
+}
+
+const initReady = Promise.all([restoreCaches(), loadSettings()]);
+
+function ensureConfigured() {
+  if (!JIRA_BASE) {
+    throw new Error("Расширение не настроено. Откройте настройки и укажите URL.");
+  }
+}
 
 async function fetchTestRunResults(testRunKey) {
+  ensureConfigured();
+
   const cached = getCached(testRunCache, testRunKey);
   if (cached) {
     logCache("HIT", testRunKey);
@@ -122,6 +178,8 @@ async function fetchTestRunResults(testRunKey) {
 }
 
 async function fetchAttachments(testResultId) {
+  ensureConfigured();
+
   const cached = getCached(attachmentsCache, testResultId);
   if (cached) {
     logCache("ATT_HIT", String(testResultId));
@@ -148,7 +206,7 @@ async function fetchAttachments(testResultId) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "getTestResult") {
-    cacheReady
+    initReady
       .then(() => handleGetTestResult(message.testRunKey, message.testCaseKey, message.includeAttachments !== false))
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
@@ -156,21 +214,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "downloadAttachment") {
-    handleDownloadAttachment(message.attachmentId, message.fileName)
+    initReady
+      .then(() => handleDownloadAttachment(message.attachmentId, message.fileName))
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true;
   }
 
   if (message.action === "getCurrentUser") {
-    handleGetCurrentUser()
+    initReady
+      .then(() => handleGetCurrentUser())
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
     return true;
   }
 
   if (message.action === "getCacheStatus") {
-    cacheReady.then(async () => {
+    initReady.then(async () => {
       const manifest = chrome.runtime.getManifest();
       const testRuns = [];
       for (const [key, entry] of testRunCache) {
@@ -189,6 +249,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         storageBytesUsed,
         name: manifest.name,
         version: manifest.version,
+        configured: !!JIRA_BASE,
       });
     });
     return true;
@@ -200,7 +261,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "prefetchTestRun") {
-    cacheReady.then(async () => {
+    initReady.then(async () => {
       try {
         const results = await fetchTestRunResults(message.testRunKey);
         sendResponse({ success: true, resultsCount: Array.isArray(results) ? results.length : 0 });
@@ -212,7 +273,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "deleteCacheEntry") {
-    cacheReady.then(() => {
+    initReady.then(() => {
       const key = message.testRunKey;
       const deleted = testRunCache.delete(key);
       logCache("DELETE", key + (deleted ? " removed" : " not found"));
@@ -223,7 +284,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "clearCache") {
-    cacheReady.then(() => {
+    initReady.then(() => {
       logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size);
       testRunCache.clear();
       attachmentsCache.clear();
@@ -233,9 +294,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.action === "settingsUpdated") {
+    loadSettings().then(() => sendResponse({ success: true }));
+    return true;
+  }
 });
 
 async function handleGetCurrentUser() {
+  ensureConfigured();
   if (cachedCurrentUser) return cachedCurrentUser;
   const resp = await fetch(JIRA_BASE + "/rest/api/2/myself", { credentials: "include" });
   if (!resp.ok) throw new Error("Failed to fetch current user: " + resp.status);
@@ -271,6 +338,7 @@ async function handleGetTestResult(testRunKey, testCaseKey, includeAttachments) 
 }
 
 async function handleDownloadAttachment(attachmentId, fileName) {
+  ensureConfigured();
   const url = `${JIRA_BASE}/rest/tests/1.0/attachment/${attachmentId}`;
   await chrome.downloads.download({ url, filename: fileName, saveAs: false });
   return { success: true };

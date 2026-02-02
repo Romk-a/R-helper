@@ -32,6 +32,17 @@ body {
   color: #6b778c;
 }
 
+.rhelper-popup-not-configured {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.rhelper-popup-not-configured-text {
+  color: #6b778c;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
 .rhelper-popup-stats {
   display: flex;
   flex-direction: column;
@@ -266,6 +277,10 @@ body {
 
   .rhelper-popup-run-delete:hover {
     color: #ff6b6b;
+  }
+
+  .rhelper-popup-not-configured-text {
+    color: #999;
   }
 
   .rhelper-popup-empty {

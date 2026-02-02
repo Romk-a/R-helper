@@ -1,9 +1,12 @@
-(() => {
+(async () => {
   "use strict";
 
-  const JIRA_BASE = "https://jira.example.ru";
-  const TEST_CASE_PREFIX = "BT-T";
-  const TEST_RUN_PREFIX = "BT-C";
+  const settingsData = await chrome.storage.local.get("settings");
+  if (!settingsData.settings || !settingsData.settings.jiraUrl || !settingsData.settings.confluenceUrl) return;
+
+  const JIRA_BASE = settingsData.settings.jiraUrl;
+  const TEST_CASE_PREFIX = settingsData.settings.testCasePrefix;
+  const TEST_RUN_PREFIX = settingsData.settings.testRunPrefix;
   const HOVER_DELAY = 300;
   const COMMENT_PREVIEW_LENGTH = 200;
 
@@ -720,11 +723,11 @@
     }
   }
 
-  async function showColorPalette(cell, e) {
+  function showColorPalette(cell, e) {
     removeColorPalette();
     removeTooltip();
     clearCellHighlight();
-    await ensureCurrentUser();
+    ensureCurrentUser();
 
     const palette = document.createElement("div");
     palette.className = "rhelper-color-palette";
@@ -833,6 +836,14 @@
     return body && body.classList.contains("mce-content-body");
   }
 
+  function handleMouseDown(e) {
+    const cell = e.target.closest("td, th");
+    if (!cell || !isTestCaseCell(cell)) return;
+    if (isEditorContext(cell)) {
+      e.preventDefault();
+    }
+  }
+
   function handleClick(e) {
     const cell = e.target.closest("td, th");
     if (!cell || !isTestCaseCell(cell)) {
@@ -881,6 +892,7 @@
     attachedRoots.add(root);
     root.addEventListener("mouseover", handleMouseOver);
     root.addEventListener("mouseout", handleMouseOut);
+    root.addEventListener("mousedown", handleMouseDown);
     root.addEventListener("click", handleClick);
     root.addEventListener("keydown", handleKeyDown);
   }
