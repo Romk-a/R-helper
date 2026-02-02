@@ -20,9 +20,8 @@
   // ===== Utility =====
 
   function stripHtml(html) {
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    return div.textContent || div.innerText || "";
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.body.textContent || "";
   }
 
   function extractVmNames(htmlComment) {
@@ -265,18 +264,25 @@
       tooltip.className = "rhelper-tooltip";
 
       if (!resp || resp.error) {
-        tooltip.innerHTML = `<span style="color:#ff8a80">${resp?.error || "Error loading data"}</span>`;
+        const errSpan = document.createElement("span");
+        errSpan.style.color = "#ff8a80";
+        errSpan.textContent = resp?.error || "Error loading data";
+        tooltip.appendChild(errSpan);
         mountTooltip(tooltip, cell);
         return;
       }
 
       if (!resp.found) {
-        tooltip.innerHTML = `<span style="color:#999">Test result not found</span>`;
+        const nfSpan = document.createElement("span");
+        nfSpan.style.color = "#999";
+        nfSpan.textContent = "Test result not found";
+        tooltip.appendChild(nfSpan);
         mountTooltip(tooltip, cell);
         return;
       }
 
-      let commentPreview = "";
+      // Build comment preview as a DocumentFragment (no innerHTML)
+      let commentFragment = null;
       if (resp.comment) {
         const withNewlines = resp.comment
           .replace(/<br\s*\/?>/gi, "\n")
@@ -300,6 +306,8 @@
           excerpt = markerIdx !== -1 ? plain.substring(markerIdx) : plain;
         }
 
+        commentFragment = document.createDocumentFragment();
+
         // If .testo reference found, make it clickable for copying to clipboard
         if (lastTestoIdx !== -1) {
           const linkMatch = excerpt.match(/^(BT[-_]T\d+\.testo:\d+:\d+)/);
@@ -309,33 +317,49 @@
             const restTruncated = rest.length > COMMENT_PREVIEW_LENGTH
               ? rest.substring(0, COMMENT_PREVIEW_LENGTH) + "..."
               : rest;
-            commentPreview = `<span class="rhelper-tooltip-testo-link" data-copy="${copyText}">${copyText}</span>${restTruncated}`;
+
+            const testoSpan = document.createElement("span");
+            testoSpan.className = "rhelper-tooltip-testo-link";
+            testoSpan.dataset.copy = copyText;
+            testoSpan.textContent = copyText;
+            commentFragment.appendChild(testoSpan);
+            commentFragment.appendChild(document.createTextNode(restTruncated));
           }
         }
 
         // Fallback: plain text preview
-        if (!commentPreview) {
-          commentPreview = excerpt.length > COMMENT_PREVIEW_LENGTH
+        if (commentFragment.childNodes.length === 0) {
+          const text = excerpt.length > COMMENT_PREVIEW_LENGTH
             ? excerpt.substring(0, COMMENT_PREVIEW_LENGTH) + "..."
             : excerpt;
+          commentFragment.appendChild(document.createTextNode(text));
         }
       }
 
       const painterClass = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
       const painter = painterClass ? painterClass.substring("rhelper-painter-".length) : "";
-      const painterHtml = painter && !cell.hasAttribute("title") && cell.hasAttribute("data-highlight-colour")
-        ? `<span class="rhelper-tooltip-painter">${painter}</span>`
-        : "";
+
+      if (painter && !cell.hasAttribute("title") && cell.hasAttribute("data-highlight-colour")) {
+        const painterSpan = document.createElement("span");
+        painterSpan.className = "rhelper-tooltip-painter";
+        painterSpan.textContent = painter;
+        tooltip.appendChild(painterSpan);
+      }
 
       const vmNames = resp.comment ? extractVmNames(resp.comment) : [];
-      const vmHtml = vmNames.length > 0
-        ? vmNames.map(n => `<span class="rhelper-tooltip-vm">${n}</span>`).join("")
-        : "";
+      for (const n of vmNames) {
+        const vmSpan = document.createElement("span");
+        vmSpan.className = "rhelper-tooltip-vm";
+        vmSpan.textContent = n;
+        tooltip.appendChild(vmSpan);
+      }
 
-      tooltip.innerHTML =
-        painterHtml +
-        vmHtml +
-        (commentPreview ? `<div class="rhelper-tooltip-comment">${commentPreview}</div>` : "");
+      if (commentFragment) {
+        const commentDiv = document.createElement("div");
+        commentDiv.className = "rhelper-tooltip-comment";
+        commentDiv.appendChild(commentFragment);
+        tooltip.appendChild(commentDiv);
+      }
 
       mountTooltip(tooltip, cell);
 
@@ -410,19 +434,46 @@
     // Header
     const header = document.createElement("div");
     header.className = "rhelper-popup-header";
-    header.innerHTML = `
-      <div class="rhelper-popup-header-left">
-        <span class="rhelper-popup-title">Тест-кейс: <a href="${JIRA_BASE}/secure/Tests.jspa#/testCase/${keys.testCaseKey}" target="_blank" rel="noopener">${keys.testCaseKey}</a> / Прогон: <a href="${JIRA_BASE}/secure/Tests.jspa#/testPlayer/${keys.testRunKey}" target="_blank" rel="noopener">${keys.testRunKey}</a></span>
-      </div>
-      <button class="rhelper-popup-close" title="Close">&times;</button>
-    `;
-    header.querySelector(".rhelper-popup-close").addEventListener("click", removePopup);
+
+    const headerLeft = document.createElement("div");
+    headerLeft.className = "rhelper-popup-header-left";
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "rhelper-popup-title";
+    titleSpan.appendChild(document.createTextNode("Тест-кейс: "));
+    const tcLink = document.createElement("a");
+    tcLink.href = JIRA_BASE + "/secure/Tests.jspa#/testCase/" + keys.testCaseKey;
+    tcLink.target = "_blank";
+    tcLink.rel = "noopener";
+    tcLink.textContent = keys.testCaseKey;
+    titleSpan.appendChild(tcLink);
+    titleSpan.appendChild(document.createTextNode(" / Прогон: "));
+    const trLink = document.createElement("a");
+    trLink.href = JIRA_BASE + "/secure/Tests.jspa#/testPlayer/" + keys.testRunKey;
+    trLink.target = "_blank";
+    trLink.rel = "noopener";
+    trLink.textContent = keys.testRunKey;
+    titleSpan.appendChild(trLink);
+    headerLeft.appendChild(titleSpan);
+    header.appendChild(headerLeft);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "rhelper-popup-close";
+    closeBtn.title = "Close";
+    closeBtn.textContent = "\u00d7";
+    closeBtn.addEventListener("click", removePopup);
+    header.appendChild(closeBtn);
     popup.appendChild(header);
 
     // Body — loading state
     const body = document.createElement("div");
     body.className = "rhelper-popup-body";
-    body.innerHTML = `<div class="rhelper-loading"><div class="rhelper-spinner"></div> Loading test result...</div>`;
+    const loadingDiv = document.createElement("div");
+    loadingDiv.className = "rhelper-loading";
+    const spinnerDiv = document.createElement("div");
+    spinnerDiv.className = "rhelper-spinner";
+    loadingDiv.appendChild(spinnerDiv);
+    loadingDiv.appendChild(document.createTextNode(" Loading test result..."));
+    body.appendChild(loadingDiv);
     popup.appendChild(body);
 
     overlay.appendChild(popup);
@@ -437,14 +488,20 @@
       if (!currentPopup || currentPopup !== overlay) return;
 
       if (!resp || resp.error) {
-        body.innerHTML = `<div class="rhelper-error">${resp?.error || "Error loading data. Make sure you are logged into Jira."}</div>`;
-
+        body.textContent = "";
+        const errDiv = document.createElement("div");
+        errDiv.className = "rhelper-error";
+        errDiv.textContent = resp?.error || "Error loading data. Make sure you are logged into Jira.";
+        body.appendChild(errDiv);
         return;
       }
 
       if (!resp.found) {
-        body.innerHTML = `<div class="rhelper-error">Test result for ${keys.testCaseKey} not found in test run ${keys.testRunKey}.</div>`;
-
+        body.textContent = "";
+        const nfDiv = document.createElement("div");
+        nfDiv.className = "rhelper-error";
+        nfDiv.textContent = "Test result for " + keys.testCaseKey + " not found in test run " + keys.testRunKey + ".";
+        body.appendChild(nfDiv);
         return;
       }
 
@@ -453,27 +510,39 @@
   }
 
   function renderPopupContent(body, data, keys) {
-    body.innerHTML = "";
+    body.textContent = "";
 
     // Comment section
     const commentSection = document.createElement("div");
     commentSection.className = "rhelper-popup-section";
-    commentSection.innerHTML = `<div class="rhelper-popup-section-title">Comment</div>`;
+    const commentTitle = document.createElement("div");
+    commentTitle.className = "rhelper-popup-section-title";
+    commentTitle.textContent = "Comment";
+    commentSection.appendChild(commentTitle);
     let commentDiv = null;
     if (data.comment) {
       commentDiv = document.createElement("div");
       commentDiv.className = "rhelper-popup-comment";
-      commentDiv.innerHTML = data.comment; // HTML from Zephyr
+      const commentDoc = new DOMParser().parseFromString(data.comment, "text/html");
+      while (commentDoc.body.firstChild) {
+        commentDiv.appendChild(document.adoptNode(commentDoc.body.firstChild));
+      }
       commentSection.appendChild(commentDiv);
     } else {
-      commentSection.innerHTML += `<div class="rhelper-popup-empty">No comment</div>`;
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "rhelper-popup-empty";
+      emptyDiv.textContent = "No comment";
+      commentSection.appendChild(emptyDiv);
     }
     body.appendChild(commentSection);
 
     // Attachments section
     const attachSection = document.createElement("div");
     attachSection.className = "rhelper-popup-section";
-    attachSection.innerHTML = `<div class="rhelper-popup-section-title">Attachments</div>`;
+    const attachTitle = document.createElement("div");
+    attachTitle.className = "rhelper-popup-section-title";
+    attachTitle.textContent = "Attachments";
+    attachSection.appendChild(attachTitle);
 
     if (data.attachments && data.attachments.length > 0) {
       const list = document.createElement("ul");
@@ -488,10 +557,15 @@
 
         const info = document.createElement("div");
         info.className = "rhelper-attachment-info";
-        info.innerHTML = `
-          <span class="rhelper-attachment-name" title="${attName}">${attName}</span>
-          <span class="rhelper-attachment-size">${formatFileSize(attSize)}</span>
-        `;
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "rhelper-attachment-name";
+        nameSpan.title = attName;
+        nameSpan.textContent = attName;
+        const sizeSpan = document.createElement("span");
+        sizeSpan.className = "rhelper-attachment-size";
+        sizeSpan.textContent = formatFileSize(attSize);
+        info.appendChild(nameSpan);
+        info.appendChild(sizeSpan);
 
         const btn = document.createElement("button");
         btn.className = "rhelper-attachment-download";
@@ -529,7 +603,10 @@
 
       attachSection.appendChild(list);
     } else {
-      attachSection.innerHTML += `<div class="rhelper-popup-empty">No attachments</div>`;
+      const emptyAttDiv = document.createElement("div");
+      emptyAttDiv.className = "rhelper-popup-empty";
+      emptyAttDiv.textContent = "No attachments";
+      attachSection.appendChild(emptyAttDiv);
     }
     body.appendChild(attachSection);
 

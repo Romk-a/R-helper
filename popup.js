@@ -36,7 +36,7 @@
     const itemsEl = document.getElementById("testRunItems");
     const emptyEl = document.getElementById("emptyMessage");
 
-    itemsEl.innerHTML = "";
+    itemsEl.textContent = "";
 
     if (resp.testRuns.length === 0) {
       listEl.hidden = true;
@@ -165,14 +165,24 @@
       logContent.textContent = "Лог пуст";
       return;
     }
-    logContent.innerHTML = resp.log
-      .slice()
-      .reverse()
-      .map(e => {
-        const t = new Date(e.ts).toLocaleTimeString("ru-RU", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        return `<div class="rhelper-popup-log-entry"><span class="rhelper-popup-log-time">${t}</span> <span class="rhelper-popup-log-action">${e.action}</span> ${e.details}</div>`;
-      })
-      .join("");
+    logContent.textContent = "";
+    const entries = resp.log.slice().reverse();
+    for (const e of entries) {
+      const t = new Date(e.ts).toLocaleTimeString("ru-RU", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const entry = document.createElement("div");
+      entry.className = "rhelper-popup-log-entry";
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "rhelper-popup-log-time";
+      timeSpan.textContent = t;
+      const actionSpan = document.createElement("span");
+      actionSpan.className = "rhelper-popup-log-action";
+      actionSpan.textContent = e.action;
+      entry.appendChild(timeSpan);
+      entry.appendChild(document.createTextNode(" "));
+      entry.appendChild(actionSpan);
+      entry.appendChild(document.createTextNode(" " + e.details));
+      logContent.appendChild(entry);
+    }
   });
 
   loadStatus();

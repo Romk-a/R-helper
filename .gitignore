@@ -1,3 +1,7 @@
 .claude/
 *.zip
+*.crx
+*.xpi
+key.pem
+.env
 CLAUDE.md
