@@ -16,6 +16,34 @@
     return (bytes / (1024 * 1024)).toFixed(1) + " МБ";
   }
 
+  let toastTimeout = null;
+  function showToast(message, duration = 3000) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { toast.hidden = true; }, duration);
+  }
+
+  function showConfirm(message) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("confirmModal");
+      document.getElementById("confirmModalText").textContent = message;
+      modal.hidden = false;
+
+      const onOk = () => { cleanup(); resolve(true); };
+      const onCancel = () => { cleanup(); resolve(false); };
+      const cleanup = () => {
+        modal.hidden = true;
+        document.getElementById("confirmModalOk").removeEventListener("click", onOk);
+        document.getElementById("confirmModalCancel").removeEventListener("click", onCancel);
+      };
+
+      document.getElementById("confirmModalOk").addEventListener("click", onOk);
+      document.getElementById("confirmModalCancel").addEventListener("click", onCancel);
+    });
+  }
+
   async function loadStatus() {
     const resp = await sendMessage({ action: "getCacheStatus" });
 
@@ -28,11 +56,13 @@
     document.getElementById("extName").textContent = resp.name;
     document.getElementById("extVersion").textContent = "v" + resp.version;
 
-    // Проверка обновлений (показывать независимо от состояния конфигурации)
+    // Проверка обновлений (только для Firefox, так как AMO API; или симулированные данные для debug)
     const updateBanner = document.getElementById("updateAvailableBanner");
     const versionResp = await sendMessage({ action: "getVersionCheck" });
+    const isFirefox = typeof chrome.runtime.getBrowserInfo === 'function';
+    const showUpdate = versionResp && versionResp.updateAvailable && (isFirefox || versionResp.simulated);
 
-    if (versionResp && versionResp.updateAvailable) {
+    if (showUpdate) {
       document.getElementById("latestVersionText").textContent = "v" + versionResp.latestVersion;
       updateBanner.hidden = false;
     } else {
@@ -220,7 +250,97 @@
     const versionResp = await sendMessage({ action: "getVersionCheck" });
     if (versionResp && versionResp.storeUrl) {
       chrome.tabs.create({ url: versionResp.storeUrl });
+      window.close();
     }
+  });
+
+  // ===== Debug mode (Ctrl+click on version) =====
+
+  const debugSection = document.getElementById("debugSection");
+  const debugInfo = document.getElementById("debugInfo");
+  const debugRawData = document.getElementById("debugRawData");
+
+  document.getElementById("extVersion").addEventListener("click", async (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+
+    debugSection.hidden = !debugSection.hidden;
+    if (!debugSection.hidden) {
+      await updateDebugInfo();
+    }
+  });
+
+  async function updateDebugInfo() {
+    const versionResp = await sendMessage({ action: "getVersionCheck" });
+    const manifest = chrome.runtime.getManifest();
+
+    const browser = (typeof chrome.runtime.getBrowserInfo === 'function') ? 'Firefox' : 'Chrome';
+    const lines = [
+      `Browser: ${browser}`,
+      `Extension: v${manifest.version}`,
+      `AMO latest: ${versionResp?.latestVersion || 'N/A'}`,
+      `Update available: ${versionResp?.updateAvailable || false}`,
+      `Last check: ${versionResp?.lastCheckTime ? new Date(versionResp.lastCheckTime).toLocaleString('ru-RU') : 'never'}`
+    ];
+    debugInfo.textContent = lines.join('\n');
+  }
+
+  document.getElementById("debugResetVersionCache").addEventListener("click", async () => {
+    await chrome.storage.local.remove("versionCheck");
+    await sendMessage({ action: "setUpdateBadge", show: false });
+    debugRawData.hidden = true;
+    await updateDebugInfo();
+    await loadStatus();
+    showToast("Кэш версии сброшен");
+  });
+
+  document.getElementById("debugForceVersionCheck").addEventListener("click", async () => {
+    const result = await sendMessage({ action: "forceVersionCheck" });
+    await updateDebugInfo();
+    await loadStatus();
+    showToast(`Проверка выполнена\nLatest: ${result?.latestVersion || 'N/A'}\nUpdate: ${result?.updateAvailable || false}`);
+  });
+
+  document.getElementById("debugShowRaw").addEventListener("click", async () => {
+    if (!debugRawData.hidden) {
+      debugRawData.hidden = true;
+      return;
+    }
+    const data = await chrome.storage.local.get("versionCheck");
+    debugRawData.textContent = JSON.stringify(data.versionCheck || null, null, 2);
+    debugRawData.hidden = false;
+  });
+
+  document.getElementById("debugSimulateUpdate").addEventListener("click", async () => {
+    const manifest = chrome.runtime.getManifest();
+    const parts = manifest.version.split('.').map(Number);
+    parts[parts.length - 1]++;
+    const fakeVersion = parts.join('.');
+
+    // Сохраняем фейковые данные в storage
+    const fakeVersionCheck = {
+      lastCheckTime: Date.now(),
+      currentVersion: manifest.version,
+      latestVersion: fakeVersion,
+      updateAvailable: true,
+      storeUrl: "https://addons.mozilla.org/ru/firefox/addon/r-helper/",
+      simulated: true
+    };
+    await chrome.storage.local.set({ versionCheck: fakeVersionCheck });
+
+    document.getElementById("latestVersionText").textContent = "v" + fakeVersion;
+    document.getElementById("updateAvailableBanner").hidden = false;
+    await sendMessage({ action: "setUpdateBadge", show: true });
+  });
+
+  document.getElementById("debugFullReset").addEventListener("click", async () => {
+    const confirmed = await showConfirm("Удалить ВСЕ данные расширения?\n\nЭто сбросит:\n- Настройки (Jira/Confluence URL)\n- Весь кэш\n- Кэш версии");
+    if (!confirmed) return;
+
+    await chrome.storage.local.clear();
+    await sendMessage({ action: "setUpdateBadge", show: false });
+    showToast("Все данные удалены. Перезагрузите расширение.");
+    setTimeout(() => window.close(), 1500);
   });
 
   loadStatus();

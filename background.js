@@ -168,6 +168,7 @@ async function checkForUpdates() {
     };
 
     await chrome.storage.local.set({ versionCheck });
+    await setUpdateBadge(updateAvailable);
     logCache("VERSION_CHECK", updateAvailable ? "Update available!" : "Up to date");
 
     return versionCheck;
@@ -191,6 +192,15 @@ async function getCachedVersionCheck() {
 
   logCache("VERSION_CACHE", "hit");
   return cached;
+}
+
+async function setUpdateBadge(show) {
+  if (show) {
+    await chrome.action.setBadgeText({ text: "!" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#e53935" });
+  } else {
+    await chrome.action.setBadgeText({ text: "" });
+  }
 }
 
 async function registerContentScript(confluenceUrl) {
@@ -237,11 +247,14 @@ chrome.alarms.get(VERSION_CHECK_ALARM, (alarm) => {
   }
 });
 
-// Проверка версии при старте (если кэш пустой или устарел)
-initReady.then(() => {
-  getCachedVersionCheck().then(cached => {
-    if (!cached) checkForUpdates();
-  });
+// Проверка версии при старте (если кэш пустой или устарел) + восстановление badge
+initReady.then(async () => {
+  const cached = await getCachedVersionCheck();
+  if (cached) {
+    await setUpdateBadge(cached.updateAvailable);
+  } else {
+    await checkForUpdates();
+  }
 });
 
 // Обработчик alarm
@@ -433,6 +446,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const result = await checkForUpdates();
       sendResponse(result || { updateAvailable: false });
     });
+    return true;
+  }
+
+  if (message.action === "setUpdateBadge") {
+    setUpdateBadge(message.show).then(() => sendResponse({ success: true }));
     return true;
   }
 });

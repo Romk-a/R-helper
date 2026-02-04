@@ -27,6 +27,19 @@
     <button id="openStoreFromUpdateBanner" class="rhelper-popup-update-btn">Обновить</button>
   </div>
 
+  <div id="debugSection" class="rhelper-popup-debug" hidden>
+    <div class="rhelper-popup-debug-title">🔧 Debug</div>
+    <div class="rhelper-popup-debug-info" id="debugInfo"></div>
+    <div class="rhelper-popup-debug-buttons">
+      <button id="debugResetVersionCache" class="rhelper-popup-debug-btn">Сбросить кэш версии</button>
+      <button id="debugForceVersionCheck" class="rhelper-popup-debug-btn">Проверить обновления</button>
+      <button id="debugShowRaw" class="rhelper-popup-debug-btn">Показать raw данные</button>
+      <button id="debugSimulateUpdate" class="rhelper-popup-debug-btn">Симулировать обновление</button>
+      <button id="debugFullReset" class="rhelper-popup-debug-btn rhelper-popup-debug-btn-danger">Полный reset</button>
+    </div>
+    <pre id="debugRawData" class="rhelper-popup-debug-raw" hidden></pre>
+  </div>
+
   <div id="mainContent">
   <div class="rhelper-popup-stats">
     <div class="rhelper-popup-stat-row">
@@ -65,6 +78,18 @@
   </div>
 
   <button id="settingsBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Настройки</button>
+  </div>
+
+  <div id="toast" class="rhelper-popup-toast" hidden></div>
+
+  <div id="confirmModal" class="rhelper-popup-modal" hidden>
+    <div class="rhelper-popup-modal-content">
+      <div class="rhelper-popup-modal-text" id="confirmModalText"></div>
+      <div class="rhelper-popup-modal-buttons">
+        <button id="confirmModalCancel" class="rhelper-popup-modal-btn">Отмена</button>
+        <button id="confirmModalOk" class="rhelper-popup-modal-btn rhelper-popup-modal-btn-danger">Удалить</button>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>
