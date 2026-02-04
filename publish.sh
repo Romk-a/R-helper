@@ -67,6 +67,57 @@ else
     echo "Firefox: версия $VERSION загружена на AMO (ожидает проверки)"
 fi
 
+# --- Скачивание .xpi с AMO ---
+XPI_DEST_DIR="/home/rgubarev/www_share"
+AMO_API_URL="https://addons.mozilla.org/api/v5/addons/addon/r-helper/"
+XPI_TIMEOUT=30
+
+echo ""
+echo "Ожидание появления .xpi на AMO (таймаут ${XPI_TIMEOUT}с)..."
+
+XPI_URL=""
+START_TIME=$(date +%s)
+
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    if [ $ELAPSED -ge $XPI_TIMEOUT ]; then
+        echo "Таймаут: не удалось получить .xpi за ${XPI_TIMEOUT}с"
+        break
+    fi
+
+    # Запрашиваем API
+    API_RESPONSE=$(curl -s "$AMO_API_URL" 2>/dev/null || echo "")
+
+    if [ -n "$API_RESPONSE" ]; then
+        # Проверяем версию и получаем URL
+        AMO_VERSION=$(echo "$API_RESPONSE" | grep -o '"version":"[^"]*"' | head -1 | sed 's/"version":"\([^"]*\)"/\1/')
+        XPI_URL=$(echo "$API_RESPONSE" | grep -o '"url":"https://addons.mozilla.org/firefox/downloads/file/[^"]*\.xpi[^"]*"' | head -1 | sed 's/"url":"\([^"]*\)"/\1/')
+
+        if [ "$AMO_VERSION" = "$VERSION" ] && [ -n "$XPI_URL" ]; then
+            echo "Найдена версия $AMO_VERSION на AMO"
+            break
+        fi
+    fi
+
+    sleep 2
+done
+
+if [ -n "$XPI_URL" ]; then
+    XPI_FILENAME="${EXTENSION_NAME}-${VERSION}.xpi"
+    echo "Скачивание: $XPI_URL"
+
+    if curl -sL --max-time 30 -o "$XPI_DEST_DIR/$XPI_FILENAME" "$XPI_URL"; then
+        echo "Сохранено: $XPI_DEST_DIR/$XPI_FILENAME"
+        ls -lh "$XPI_DEST_DIR/$XPI_FILENAME"
+    else
+        echo "ОШИБКА: не удалось скачать .xpi"
+    fi
+else
+    echo "Не удалось получить ссылку на .xpi (возможно, версия ещё на модерации)"
+fi
+
 # --- Chrome Web Store (TODO) ---
 # Для публикации в Chrome Web Store нужен Chrome Web Store API
 # https://developer.chrome.com/docs/webstore/using_webstore_api/
