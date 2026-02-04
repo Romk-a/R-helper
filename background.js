@@ -184,6 +184,13 @@ async function getCachedVersionCheck() {
 
   if (!cached) return null;
 
+  // Invalidate cache if extension version changed (e.g. after update)
+  const currentVersion = chrome.runtime.getManifest().version;
+  if (cached.currentVersion !== currentVersion) {
+    logCache("VERSION_CACHE", "invalidated (extension updated)");
+    return null;
+  }
+
   const age = Date.now() - cached.lastCheckTime;
   if (age > VERSION_CHECK_TTL) {
     logCache("VERSION_CACHE", "expired");
