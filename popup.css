@@ -43,6 +43,59 @@ body {
   margin-bottom: 12px;
 }
 
+.rhelper-popup-update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 1px solid #81c784;
+  border-radius: 6px;
+}
+
+.rhelper-popup-update-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.rhelper-popup-update-content {
+  flex: 1;
+}
+
+.rhelper-popup-update-text {
+  font-size: 13px;
+  color: #2e7d32;
+  font-weight: 500;
+}
+
+.rhelper-popup-update-version {
+  font-size: 12px;
+  color: #558b2f;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+}
+
+.rhelper-popup-update-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #4caf50;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rhelper-popup-update-btn:hover {
+  background: #43a047;
+}
+
+.rhelper-popup-update-btn:active {
+  background: #388e3c;
+}
+
 .rhelper-popup-stats {
   display: flex;
   flex-direction: column;
@@ -334,5 +387,30 @@ body {
 
   .rhelper-popup-log-action {
     color: #79b8ff;
+  }
+
+  .rhelper-popup-update-banner {
+    background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%);
+    border-color: #4caf50;
+  }
+
+  .rhelper-popup-update-text {
+    color: #a5d6a7;
+  }
+
+  .rhelper-popup-update-version {
+    color: #c8e6c9;
+  }
+
+  .rhelper-popup-update-btn {
+    background: #66bb6a;
+  }
+
+  .rhelper-popup-update-btn:hover {
+    background: #81c784;
+  }
+
+  .rhelper-popup-update-btn:active {
+    background: #a5d6a7;
   }
 }

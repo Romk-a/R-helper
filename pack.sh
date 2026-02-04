@@ -1,5 +1,21 @@
 #!/bin/bash
-# Упаковка расширения R-Helper для Chrome (.crx) и Firefox (.xpi)
+# pack.sh — Сборка расширения R-Helper
+#
+# Что делает:
+#   1. Проверяет, что версии в manifest.json и manifest.firefox.json совпадают
+#   2. Собирает Chrome-пакет (.crx) через npx crx
+#   3. Собирает Firefox-пакет (.zip)
+#
+# Требования:
+#   - Node.js + npm (для npx crx)
+#   - key.pem для подписи Chrome-пакета (создаётся автоматически при первом запуске)
+#
+# Результат:
+#   - r-helper-{version}.crx — Chrome-пакет
+#   - r-helper-{version}-firefox.zip — Firefox-пакет
+#
+# После сборки протестируй пакеты, затем запусти ./publish.sh для публикации
+#
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -54,34 +70,13 @@ for f in "${SHARED_FILES[@]}"; do
     cp -r "$f" "$FIREFOX_DIR/"
 done
 
-# Загружаем ключи из .env
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    set -a
-    source "$SCRIPT_DIR/.env"
-    set +a
-fi
-
-if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
-    echo "ОШИБКА: AMO_JWT_ISSUER и AMO_JWT_SECRET не заданы (проверьте .env)"
-    exit 1
-fi
-
 FIREFOX_OUTPUT="${EXTENSION_NAME}-${VERSION}-firefox.zip"
 rm -f "$FIREFOX_OUTPUT"
 
-# Сохраняем локальную копию zip для архива
 (cd "$FIREFOX_DIR" && zip -r "$SCRIPT_DIR/$FIREFOX_OUTPUT" .)
 
-npx --yes web-ext sign \
-    --source-dir="$FIREFOX_DIR" \
-    --artifacts-dir="$TMPDIR_BASE/artifacts" \
-    --api-key="$AMO_JWT_ISSUER" \
-    --api-secret="$AMO_JWT_SECRET" \
-    --channel=listed
-
-echo "Firefox: версия $VERSION загружена на AMO (ожидает проверки)"
-
 echo ""
-echo "Результат:"
+echo "Сборка завершена:"
 ls -lh "$SCRIPT_DIR/$CHROME_OUTPUT" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
-echo "Firefox listed-версия загружена на AMO и ожидает проверки."
+echo ""
+echo "Протестируй пакеты, затем запусти ./publish.sh для публикации на AMO."

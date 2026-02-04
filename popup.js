@@ -28,6 +28,17 @@
     document.getElementById("extName").textContent = resp.name;
     document.getElementById("extVersion").textContent = "v" + resp.version;
 
+    // Проверка обновлений (показывать независимо от состояния конфигурации)
+    const updateBanner = document.getElementById("updateAvailableBanner");
+    const versionResp = await sendMessage({ action: "getVersionCheck" });
+
+    if (versionResp && versionResp.updateAvailable) {
+      document.getElementById("latestVersionText").textContent = "v" + versionResp.latestVersion;
+      updateBanner.hidden = false;
+    } else {
+      updateBanner.hidden = true;
+    }
+
     const banner = document.getElementById("notConfiguredBanner");
     const mainContent = document.getElementById("mainContent");
     if (!resp.configured) {
@@ -203,6 +214,13 @@
 
   document.getElementById("settingsBtn").addEventListener("click", () => {
     chrome.runtime.openOptionsPage();
+  });
+
+  document.getElementById("openStoreFromUpdateBanner").addEventListener("click", async () => {
+    const versionResp = await sendMessage({ action: "getVersionCheck" });
+    if (versionResp && versionResp.storeUrl) {
+      chrome.tabs.create({ url: versionResp.storeUrl });
+    }
   });
 
   loadStatus();

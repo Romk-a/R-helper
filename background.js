@@ -1,5 +1,8 @@
 let JIRA_BASE = "";
 const CACHE_TTL = 15 * 24 * 60 * 60 * 1000; // 15 дней
+const VERSION_CHECK_TTL = 24 * 60 * 60 * 1000; // 24 часа
+const VERSION_CHECK_ALARM = "version-check-alarm";
+const AMO_API_URL = "https://addons.mozilla.org/api/v5/addons/addon/r-helper/";
 
 const testRunCache = new Map();
 const attachmentsCache = new Map();
@@ -97,6 +100,99 @@ async function loadSettings() {
   }
 }
 
+// ===== Version check functions =====
+
+async function detectBrowser() {
+  if (typeof chrome.runtime.getBrowserInfo === 'function') {
+    try {
+      await chrome.runtime.getBrowserInfo();
+      return 'firefox';
+    } catch (e) {
+      return 'chrome';
+    }
+  }
+  return 'chrome';
+}
+
+function compareVersions(v1, v2) {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 < p2) return -1;
+    if (p1 > p2) return 1;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
+  const browser = await detectBrowser();
+  const manifest = chrome.runtime.getManifest();
+  const currentVersion = manifest.version;
+
+  if (browser === 'chrome') {
+    logCache("VERSION_CHECK", "Chrome: skipped (no public API)");
+    return null;
+  }
+
+  try {
+    logCache("VERSION_CHECK", "Checking AMO for updates...");
+    const resp = await fetch(AMO_API_URL, { credentials: "omit" });
+
+    if (!resp.ok) {
+      logCache("VERSION_CHECK_ERR", `AMO API returned ${resp.status}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const latestVersion = data?.current_version?.version;
+
+    if (!latestVersion) {
+      logCache("VERSION_CHECK_ERR", "No version in AMO response");
+      return null;
+    }
+
+    logCache("VERSION_CHECK", `Current: ${currentVersion}, Latest: ${latestVersion}`);
+
+    const updateAvailable = compareVersions(currentVersion, latestVersion) < 0;
+
+    const versionCheck = {
+      lastCheckTime: Date.now(),
+      currentVersion,
+      latestVersion,
+      updateAvailable,
+      storeUrl: "https://addons.mozilla.org/ru/firefox/addon/r-helper/",
+      browser
+    };
+
+    await chrome.storage.local.set({ versionCheck });
+    logCache("VERSION_CHECK", updateAvailable ? "Update available!" : "Up to date");
+
+    return versionCheck;
+  } catch (err) {
+    logCache("VERSION_CHECK_ERR", err.message);
+    return null;
+  }
+}
+
+async function getCachedVersionCheck() {
+  const data = await chrome.storage.local.get("versionCheck");
+  const cached = data.versionCheck;
+
+  if (!cached) return null;
+
+  const age = Date.now() - cached.lastCheckTime;
+  if (age > VERSION_CHECK_TTL) {
+    logCache("VERSION_CACHE", "expired");
+    return null;
+  }
+
+  logCache("VERSION_CACHE", "hit");
+  return cached;
+}
+
 async function registerContentScript(confluenceUrl) {
   if (!confluenceUrl) return;
 
@@ -132,6 +228,29 @@ async function registerContentScript(confluenceUrl) {
 }
 
 const initReady = Promise.all([restoreCaches(), loadSettings()]);
+
+// Создание alarm для периодической проверки версий (каждые 24 часа)
+chrome.alarms.get(VERSION_CHECK_ALARM, (alarm) => {
+  if (!alarm) {
+    chrome.alarms.create(VERSION_CHECK_ALARM, { periodInMinutes: 1440 });
+    logCache("ALARM", "Version check alarm created");
+  }
+});
+
+// Проверка версии при старте (если кэш пустой или устарел)
+initReady.then(() => {
+  getCachedVersionCheck().then(cached => {
+    if (!cached) checkForUpdates();
+  });
+});
+
+// Обработчик alarm
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === VERSION_CHECK_ALARM) {
+    logCache("ALARM", "Version check alarm fired");
+    initReady.then(() => checkForUpdates());
+  }
+});
 
 function ensureConfigured() {
   if (!JIRA_BASE) {
@@ -297,6 +416,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "settingsUpdated") {
     loadSettings().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
+  if (message.action === "getVersionCheck") {
+    initReady.then(async () => {
+      let cached = await getCachedVersionCheck();
+      if (!cached) cached = await checkForUpdates();
+      sendResponse(cached || { updateAvailable: false });
+    });
+    return true;
+  }
+
+  if (message.action === "forceVersionCheck") {
+    initReady.then(async () => {
+      const result = await checkForUpdates();
+      sendResponse(result || { updateAvailable: false });
+    });
     return true;
   }
 });
