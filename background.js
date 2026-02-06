@@ -278,6 +278,14 @@ function ensureConfigured() {
   }
 }
 
+function checkAuthResponse(resp, context) {
+  if (resp.ok) return;
+  if (resp.status === 401 || resp.status === 403) {
+    throw new Error("Сессия истекла. Войдите в Jira и обновите страницу.");
+  }
+  throw new Error(`${context}: ${resp.status} ${resp.statusText}`);
+}
+
 async function fetchTestRunResults(testRunKey) {
   ensureConfigured();
 
@@ -296,9 +304,7 @@ async function fetchTestRunResults(testRunKey) {
   const promise = (async () => {
     const url = `${JIRA_BASE}/rest/atm/1.0/testrun/${testRunKey}/testresults`;
     const resp = await fetch(url, { credentials: "include" });
-    if (!resp.ok) {
-      throw new Error(`Failed to fetch test run results: ${resp.status} ${resp.statusText}`);
-    }
+    checkAuthResponse(resp, "Ошибка загрузки результатов");
     const data = await resp.json();
     logCache("FETCHED", testRunKey + " → " + (Array.isArray(data) ? data.length : 0) + " results");
     setCache(testRunCache, testRunKey, data);
@@ -329,9 +335,7 @@ async function fetchAttachments(testResultId) {
   try {
     const resp = await fetch(url, { credentials: "include" });
 
-    if (!resp.ok) {
-      throw new Error(`Failed to fetch attachments: ${resp.status} ${resp.statusText}`);
-    }
+    checkAuthResponse(resp, "Ошибка загрузки вложений");
 
     const data = await resp.json();
     logCache("ATT_FETCHED", testResultId + " → " + (Array.isArray(data) ? data.length : 0) + " items");
@@ -466,7 +470,7 @@ async function handleGetCurrentUser() {
   ensureConfigured();
   if (cachedCurrentUser) return cachedCurrentUser;
   const resp = await fetch(JIRA_BASE + "/rest/api/2/myself", { credentials: "include" });
-  if (!resp.ok) throw new Error("Failed to fetch current user: " + resp.status);
+  checkAuthResponse(resp, "Ошибка загрузки пользователя");
   const data = await resp.json();
   cachedCurrentUser = { name: data.name };
   await chrome.storage.local.set({ currentUser: { data: cachedCurrentUser, ts: Date.now() } });

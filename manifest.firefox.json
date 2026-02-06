@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "R-Helper",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Preview Zephyr Scale test results directly on Confluence pages",
   "permissions": ["activeTab", "downloads", "storage", "unlimitedStorage", "scripting", "alarms"],
   "optional_host_permissions": ["*://*/*"],

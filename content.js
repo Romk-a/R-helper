@@ -165,6 +165,7 @@
     if (highlightOverlay) return highlightOverlay;
     const el = document.createElement("div");
     el.className = "rhelper-highlight-overlay";
+    el.setAttribute("data-mce-bogus", "all");
     el.style.display = "none";
     document.body.appendChild(el);
     highlightOverlay = el;
@@ -265,6 +266,7 @@
 
       const tooltip = document.createElement("div");
       tooltip.className = "rhelper-tooltip";
+      tooltip.setAttribute("data-mce-bogus", "all");
 
       if (!resp || resp.error) {
         const errSpan = document.createElement("span");
@@ -396,6 +398,7 @@
 
     const overlay = document.createElement("div");
     overlay.className = "rhelper-lightbox";
+    overlay.setAttribute("data-mce-bogus", "all");
     overlay.addEventListener("click", removeLightbox);
 
     const img = document.createElement("img");
@@ -427,6 +430,7 @@
 
     const overlay = document.createElement("div");
     overlay.className = "rhelper-overlay";
+    overlay.setAttribute("data-mce-bogus", "all");
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) removePopup();
     });
@@ -731,6 +735,7 @@
 
     const palette = document.createElement("div");
     palette.className = "rhelper-color-palette";
+    palette.setAttribute("data-mce-bogus", "all");
 
     PALETTE_COLORS.forEach(({ color, title }) => {
       const swatch = document.createElement("div");
