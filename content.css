@@ -64,6 +64,26 @@
   text-decoration: underline;
 }
 
+.rhelper-tooltip-more {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #79b8ff;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  font-family: inherit;
+}
+
+.rhelper-tooltip-more:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .rhelper-testo-link {
   color: #0052cc;
   cursor: pointer;

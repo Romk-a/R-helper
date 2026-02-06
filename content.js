@@ -248,6 +248,17 @@
     });
   }
 
+  function createMoreButton(cell) {
+    const btn = document.createElement("button");
+    btn.className = "rhelper-tooltip-more";
+    btn.textContent = "Ещё";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      showPopup(cell);
+    });
+    return btn;
+  }
+
   function showTooltip(cell, e) {
     removeTooltip();
 
@@ -273,6 +284,7 @@
         errSpan.style.color = "#ff8a80";
         errSpan.textContent = resp?.error || "Error loading data";
         tooltip.appendChild(errSpan);
+        tooltip.appendChild(createMoreButton(cell));
         mountTooltip(tooltip, cell);
         return;
       }
@@ -282,6 +294,7 @@
         nfSpan.style.color = "#999";
         nfSpan.textContent = "Test result not found";
         tooltip.appendChild(nfSpan);
+        tooltip.appendChild(createMoreButton(cell));
         mountTooltip(tooltip, cell);
         return;
       }
@@ -366,6 +379,7 @@
         tooltip.appendChild(commentDiv);
       }
 
+      tooltip.appendChild(createMoreButton(cell));
       mountTooltip(tooltip, cell);
 
       const copyEl = tooltip.querySelector(".rhelper-tooltip-testo-link");
