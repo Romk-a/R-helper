@@ -76,8 +76,6 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     set +a
 fi
 
-SHARE_DIR="/home/rgubarev/www_share"
-
 # Удаляет старые версии из SHARE_DIR по паттерну, оставляя указанный файл
 # Аргументы: $1 — glob-паттерн (например "r-helper-*.xpi"), $2 — файл текущей версии
 cleanup_old_versions() {
@@ -133,6 +131,11 @@ publish_firefox() {
 }
 
 download_xpi() {
+    if [ -z "$SHARE_DIR" ]; then
+        echo "SHARE_DIR не задан, пропускаю копирование .xpi"
+        return 0
+    fi
+
     local XPI_DEST_DIR="$SHARE_DIR"
     AMO_API_URL="https://addons.mozilla.org/api/v5/addons/addon/r-helper/"
     XPI_TIMEOUT=30
@@ -290,8 +293,7 @@ if $DO_CHROME; then
     while true; do
         if publish_chrome; then
             # Копируем zip в www_share
-            SHARE_DIR="/home/rgubarev/www_share"
-            if [ -d "$SHARE_DIR" ]; then
+            if [ -n "$SHARE_DIR" ] && [ -d "$SHARE_DIR" ]; then
                 cp "$CHROME_ZIP" "$SHARE_DIR/$CHROME_ZIP"
                 echo "Скопировано: $SHARE_DIR/$CHROME_ZIP"
                 cleanup_old_versions "${EXTENSION_NAME}-*-chrome.zip" "$CHROME_ZIP"
