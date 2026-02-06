@@ -56,11 +56,10 @@
     document.getElementById("extName").textContent = resp.name;
     document.getElementById("extVersion").textContent = "v" + resp.version;
 
-    // Проверка обновлений (только для Firefox, так как AMO API; или симулированные данные для debug)
+    // Проверка обновлений
     const updateBanner = document.getElementById("updateAvailableBanner");
     const versionResp = await sendMessage({ action: "getVersionCheck" });
-    const isFirefox = typeof chrome.runtime.getBrowserInfo === 'function';
-    const showUpdate = versionResp && versionResp.updateAvailable && (isFirefox || versionResp.simulated);
+    const showUpdate = versionResp && versionResp.updateAvailable;
 
     if (showUpdate) {
       document.getElementById("latestVersionText").textContent = "v" + versionResp.latestVersion;
@@ -278,7 +277,7 @@
     const lines = [
       `Browser: ${browser}`,
       `Extension: v${manifest.version}`,
-      `AMO latest: ${versionResp?.latestVersion || 'N/A'}`,
+      `Store latest: ${versionResp?.latestVersion || 'N/A'}`,
       `Update available: ${versionResp?.updateAvailable || false}`,
       `Last check: ${versionResp?.lastCheckTime ? new Date(versionResp.lastCheckTime).toLocaleString('ru-RU') : 'never'}`
     ];
@@ -323,7 +322,9 @@
       currentVersion: manifest.version,
       latestVersion: fakeVersion,
       updateAvailable: true,
-      storeUrl: "https://addons.mozilla.org/ru/firefox/addon/r-helper/",
+      storeUrl: (typeof chrome.runtime.getBrowserInfo === 'function')
+        ? "https://addons.mozilla.org/ru/firefox/addon/r-helper/"
+        : "https://chromewebstore.google.com/detail/fpapambilmojcifjplicmmjodjginmaj",
       simulated: true
     };
     await chrome.storage.local.set({ versionCheck: fakeVersionCheck });

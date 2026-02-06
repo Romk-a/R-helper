@@ -4,11 +4,13 @@
 # Что делает:
 #   1. Проверяет наличие собранных пакетов
 #   2. Загружает Firefox-версию на AMO через web-ext sign
+#   3. Скачивает подписанный .xpi с AMO
+#   4. Загружает и публикует Chrome-версию в Chrome Web Store
 #
 # Требования:
 #   - Собранные пакеты (сначала запусти ./pack.sh)
 #   - Node.js + npm (для web-ext)
-#   - Файл .env с AMO_JWT_ISSUER и AMO_JWT_SECRET
+#   - Файл .env с credentials (см. .env для списка переменных)
 #
 # Использование:
 #   ./pack.sh        # собрать пакеты
@@ -24,17 +26,23 @@ EXTENSION_NAME="r-helper"
 VERSION=$(grep '"version"' manifest.json | sed 's/.*: *"\(.*\)".*/\1/')
 
 CHROME_OUTPUT="${EXTENSION_NAME}-${VERSION}.crx"
+CHROME_ZIP="${EXTENSION_NAME}-${VERSION}-chrome.zip"
 FIREFOX_OUTPUT="${EXTENSION_NAME}-${VERSION}-firefox.zip"
 
 # Проверяем наличие пакетов
-if [ ! -f "$CHROME_OUTPUT" ] || [ ! -f "$FIREFOX_OUTPUT" ]; then
+MISSING=()
+[ ! -f "$CHROME_OUTPUT" ] && MISSING+=("$CHROME_OUTPUT")
+[ ! -f "$CHROME_ZIP" ] && MISSING+=("$CHROME_ZIP")
+[ ! -f "$FIREFOX_OUTPUT" ] && MISSING+=("$FIREFOX_OUTPUT")
+
+if [ ${#MISSING[@]} -gt 0 ]; then
     echo "ОШИБКА: Пакеты не найдены. Сначала запусти ./pack.sh"
-    echo "Ожидаемые файлы: $CHROME_OUTPUT, $FIREFOX_OUTPUT"
+    echo "Отсутствуют: ${MISSING[*]}"
     exit 1
 fi
 
 echo "Найдены пакеты:"
-ls -lh "$CHROME_OUTPUT" "$FIREFOX_OUTPUT"
+ls -lh "$CHROME_OUTPUT" "$CHROME_ZIP" "$FIREFOX_OUTPUT"
 echo ""
 
 # Загружаем ключи из .env
@@ -45,27 +53,43 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
 fi
 
 # --- Firefox (AMO) ---
-if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
-    echo "ПРЕДУПРЕЖДЕНИЕ: AMO_JWT_ISSUER и AMO_JWT_SECRET не заданы (проверь .env)"
-    echo "Пропускаю публикацию на AMO."
-else
+publish_firefox() {
+    if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: AMO_JWT_ISSUER и/или AMO_JWT_SECRET не заданы (проверь .env)"
+        return 1
+    fi
+
     echo "Публикация на AMO..."
 
     # Распаковываем zip во временную папку для web-ext
-    TMPDIR=$(mktemp -d)
-    trap 'rm -rf "$TMPDIR"' EXIT
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    trap 'rm -rf "$tmpdir"' RETURN
 
-    unzip -q "$FIREFOX_OUTPUT" -d "$TMPDIR/firefox"
+    unzip -q "$FIREFOX_OUTPUT" -d "$tmpdir/firefox"
 
     npx --yes web-ext sign \
-        --source-dir="$TMPDIR/firefox" \
-        --artifacts-dir="$TMPDIR/artifacts" \
+        --source-dir="$tmpdir/firefox" \
+        --artifacts-dir="$tmpdir/artifacts" \
         --api-key="$AMO_JWT_ISSUER" \
         --api-secret="$AMO_JWT_SECRET" \
         --channel=listed
 
     echo "Firefox: версия $VERSION загружена на AMO (ожидает проверки)"
-fi
+}
+
+while true; do
+    if publish_firefox; then
+        break
+    fi
+    echo ""
+    read -rp "[R]etry / [S]kip? " choice
+    case "$choice" in
+        [rR]) echo "Повтор..."; continue ;;
+        [sS]) echo "Пропускаю публикацию на AMO."; break ;;
+        *) echo "Введи R или S" ;;
+    esac
+done
 
 # --- Скачивание .xpi с AMO ---
 XPI_DEST_DIR="/home/rgubarev/www_share"
@@ -118,17 +142,83 @@ else
     echo "Не удалось получить ссылку на .xpi (возможно, версия ещё на модерации)"
 fi
 
-# --- Chrome Web Store (TODO) ---
-# Для публикации в Chrome Web Store нужен Chrome Web Store API
-# https://developer.chrome.com/docs/webstore/using_webstore_api/
-# Раскомментируй и настрой, когда будет готово:
-#
-# if [ -z "$CHROME_CLIENT_ID" ] || [ -z "$CHROME_CLIENT_SECRET" ] || [ -z "$CHROME_REFRESH_TOKEN" ]; then
-#     echo "ПРЕДУПРЕЖДЕНИЕ: Chrome Web Store credentials не заданы"
-# else
-#     echo "Публикация в Chrome Web Store..."
-#     # ... API вызовы ...
-# fi
+# --- Chrome Web Store ---
+publish_chrome() {
+    if [ -z "$CHROME_EXTENSION_ID" ] || [ -z "$CHROME_PUBLISHER_ID" ] || \
+       [ -z "$CHROME_CLIENT_ID" ] || [ -z "$CHROME_CLIENT_SECRET" ] || [ -z "$CHROME_REFRESH_TOKEN" ]; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: Chrome Web Store credentials не заданы (проверь .env)"
+        echo "Нужны: CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID, CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN"
+        return 1
+    fi
+
+    echo "Публикация в Chrome Web Store..."
+
+    # 1. Получаем access token
+    echo "  Получение access token..."
+    TOKEN_RESPONSE=$(curl -s -X POST "https://oauth2.googleapis.com/token" \
+        --data-urlencode "client_id=$CHROME_CLIENT_ID" \
+        --data-urlencode "client_secret=$CHROME_CLIENT_SECRET" \
+        --data-urlencode "refresh_token=$CHROME_REFRESH_TOKEN" \
+        --data-urlencode "grant_type=refresh_token")
+
+    ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token" *: *"[^"]*"' | sed 's/"access_token" *: *"\([^"]*\)"/\1/')
+
+    if [ -z "$ACCESS_TOKEN" ]; then
+        echo "ОШИБКА: не удалось получить access token"
+        echo "Ответ: $TOKEN_RESPONSE"
+        return 1
+    fi
+    echo "  Access token получен"
+
+    # 2. Загружаем zip
+    echo "  Загрузка $CHROME_ZIP..."
+    UPLOAD_RESPONSE=$(curl -s -X POST \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "x-goog-api-version: 2" \
+        -T "$CHROME_ZIP" \
+        "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID")
+
+    UPLOAD_STATE=$(echo "$UPLOAD_RESPONSE" | grep -o '"uploadState" *: *"[^"]*"' | sed 's/"uploadState" *: *"\([^"]*\)"/\1/')
+
+    if [ "$UPLOAD_STATE" != "SUCCESS" ]; then
+        echo "ОШИБКА: загрузка не удалась (uploadState=$UPLOAD_STATE)"
+        echo "Ответ: $UPLOAD_RESPONSE"
+        return 1
+    fi
+    echo "  Загрузка завершена"
+
+    # 3. Публикуем
+    echo "  Публикация..."
+    PUBLISH_RESPONSE=$(curl -s -X POST \
+        -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "x-goog-api-version: 2" \
+        -H "Content-Length: 0" \
+        "https://www.googleapis.com/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID/publish")
+
+    PUBLISH_STATUS=$(echo "$PUBLISH_RESPONSE" | grep -o '"status" *: *\[[^]]*\]' | grep -o '"[A-Z_]*"' | head -1 | tr -d '"')
+
+    if [ "$PUBLISH_STATUS" != "OK" ] && [ "$PUBLISH_STATUS" != "PUBLISHED_WITH_FRICTION_WARNING" ]; then
+        echo "ОШИБКА: публикация не удалась (status=$PUBLISH_STATUS)"
+        echo "Ответ: $PUBLISH_RESPONSE"
+        return 1
+    fi
+
+    echo "Chrome: версия $VERSION опубликована в Chrome Web Store (status=$PUBLISH_STATUS)"
+}
+
+echo ""
+while true; do
+    if publish_chrome; then
+        break
+    fi
+    echo ""
+    read -rp "[R]etry / [S]kip? " choice
+    case "$choice" in
+        [rR]) echo "Повтор..."; continue ;;
+        [sS]) echo "Пропускаю публикацию в Chrome Web Store."; break ;;
+        *) echo "Введи R или S" ;;
+    esac
+done
 
 echo ""
 echo "Готово!"

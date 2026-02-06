@@ -4,6 +4,7 @@
   "version": "1.5.1",
   "description": "Preview Zephyr Scale test results directly on Confluence pages",
   "permissions": ["activeTab", "downloads", "storage", "unlimitedStorage", "scripting", "alarms"],
+  "host_permissions": ["*://clients2.google.com/*"],
   "optional_host_permissions": ["*://*/*"],
   "background": {
     "service_worker": "background.js"

@@ -12,6 +12,7 @@
 #
 # Результат:
 #   - r-helper-{version}.crx — Chrome-пакет
+#   - r-helper-{version}-chrome.zip — Chrome-пакет для Chrome Web Store
 #   - r-helper-{version}-firefox.zip — Firefox-пакет
 #
 # После сборки протестируй пакеты, затем запусти ./publish.sh для публикации
@@ -62,6 +63,12 @@ rm -f "$CHROME_OUTPUT"
 npx --yes crx pack "$CHROME_DIR" -o "$SCRIPT_DIR/$CHROME_OUTPUT" -p "$SCRIPT_DIR/key.pem"
 echo "Создан: $CHROME_OUTPUT"
 
+# --- Chrome (.zip для Chrome Web Store) ---
+CHROME_ZIP="${EXTENSION_NAME}-${VERSION}-chrome.zip"
+rm -f "$CHROME_ZIP"
+(cd "$CHROME_DIR" && zip -r "$SCRIPT_DIR/$CHROME_ZIP" .)
+echo "Создан: $CHROME_ZIP"
+
 # --- Firefox (.xpi, подписанный через AMO) ---
 FIREFOX_DIR="$TMPDIR_BASE/firefox"
 mkdir -p "$FIREFOX_DIR"
@@ -77,6 +84,6 @@ rm -f "$FIREFOX_OUTPUT"
 
 echo ""
 echo "Сборка завершена:"
-ls -lh "$SCRIPT_DIR/$CHROME_OUTPUT" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
+ls -lh "$SCRIPT_DIR/$CHROME_OUTPUT" "$SCRIPT_DIR/$CHROME_ZIP" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
 echo ""
-echo "Протестируй пакеты, затем запусти ./publish.sh для публикации на AMO."
+echo "Протестируй пакеты, затем запусти ./publish.sh для публикации."

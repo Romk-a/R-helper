@@ -1,8 +1,11 @@
 let JIRA_BASE = "";
 const CACHE_TTL = 15 * 24 * 60 * 60 * 1000; // 15 дней
-const VERSION_CHECK_TTL = 24 * 60 * 60 * 1000; // 24 часа
+const VERSION_CHECK_TTL = 2 * 60 * 60 * 1000; // 2 часа
 const VERSION_CHECK_ALARM = "version-check-alarm";
 const AMO_API_URL = "https://addons.mozilla.org/api/v5/addons/addon/r-helper/";
+const CWS_EXTENSION_ID = "fpapambilmojcifjplicmmjodjginmaj";
+const CWS_UPDATE_URL = `https://clients2.google.com/service/update2/crx?response=updatecheck&x=id%3D${CWS_EXTENSION_ID}%26uc&prodversion=999&acceptformat=crx3`;
+const CWS_STORE_URL = `https://chromewebstore.google.com/detail/${CWS_EXTENSION_ID}`;
 
 const testRunCache = new Map();
 const attachmentsCache = new Map();
@@ -133,8 +136,46 @@ async function checkForUpdates() {
   const currentVersion = manifest.version;
 
   if (browser === 'chrome') {
-    logCache("VERSION_CHECK", "Chrome: skipped (no public API)");
-    return null;
+    try {
+      logCache("VERSION_CHECK", "Chrome: checking CWS for updates...");
+      const resp = await fetch(CWS_UPDATE_URL, { credentials: "omit" });
+
+      if (!resp.ok) {
+        logCache("VERSION_CHECK_ERR", `CWS update API returned ${resp.status}`);
+        return null;
+      }
+
+      const xml = await resp.text();
+      const match = xml.match(/<updatecheck[^>]+version=["']([^"']+)["']/);
+      const latestVersion = match?.[1];
+
+      if (!latestVersion) {
+        logCache("VERSION_CHECK_ERR", "No version in CWS response");
+        return null;
+      }
+
+      logCache("VERSION_CHECK", `Current: ${currentVersion}, CWS latest: ${latestVersion}`);
+
+      const updateAvailable = compareVersions(currentVersion, latestVersion) < 0;
+
+      const versionCheck = {
+        lastCheckTime: Date.now(),
+        currentVersion,
+        latestVersion,
+        updateAvailable,
+        storeUrl: CWS_STORE_URL,
+        browser
+      };
+
+      await chrome.storage.local.set({ versionCheck });
+      await setUpdateBadge(updateAvailable);
+      logCache("VERSION_CHECK", updateAvailable ? "Update available!" : "Up to date");
+
+      return versionCheck;
+    } catch (err) {
+      logCache("VERSION_CHECK_ERR", `Chrome: ${err.message}`);
+      return null;
+    }
   }
 
   try {
@@ -454,7 +495,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "forceVersionCheck") {
     initReady.then(async () => {
-      const result = await checkForUpdates();
+      let result = await checkForUpdates();
+      if (!result) result = await getCachedVersionCheck();
       sendResponse(result || { updateAvailable: false });
     });
     return true;
