@@ -120,12 +120,15 @@ publish_firefox() {
 
     unzip -q "$FIREFOX_OUTPUT" -d "$tmpdir/firefox"
 
-    npx --yes web-ext sign \
+    if ! npx --yes web-ext sign \
         --source-dir="$tmpdir/firefox" \
         --artifacts-dir="$tmpdir/artifacts" \
         --api-key="$AMO_JWT_ISSUER" \
         --api-secret="$AMO_JWT_SECRET" \
-        --channel=listed
+        --channel=listed; then
+        echo "ОШИБКА: web-ext sign завершился с ошибкой"
+        return 1
+    fi
 
     echo "Firefox: версия $VERSION загружена на AMO (ожидает проверки)"
 }
@@ -152,6 +155,7 @@ download_xpi() {
 
         if [ $ELAPSED -ge $XPI_TIMEOUT ]; then
             echo "Таймаут: не удалось получить .xpi за ${XPI_TIMEOUT}с"
+            XPI_URL=""
             break
         fi
 
@@ -272,7 +276,7 @@ publish_chrome() {
         -H "Content-Length: 0" \
         "https://www.googleapis.com/chromewebstore/v1.1/items/$CHROME_EXTENSION_ID/publish")
 
-    PUBLISH_STATUS=$(echo "$PUBLISH_RESPONSE" | grep -o '"status" *: *\[[^]]*\]' | grep -o '"[A-Z_]*"' | head -1 | tr -d '"')
+    PUBLISH_STATUS=$(echo "$PUBLISH_RESPONSE" | tr -d '\n' | grep -o '"status" *: *\[[^]]*\]' | grep -o '"[A-Z_]*"' | head -1 | tr -d '"')
 
     if echo "$PUBLISH_RESPONSE" | grep -q "item that is in review"; then
         echo "Chrome: версия $VERSION уже на проверке в CWS"

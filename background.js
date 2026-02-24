@@ -291,7 +291,7 @@ async function registerContentScript(confluenceUrl) {
       matches: [matchPattern],
       js: ["content-shared.js", "content.js"],
       css: ["content.css"],
-      allFrames: true,
+      allFrames: false,
       persistAcrossSessions: true,
       runAt: "document_idle",
     }]);
