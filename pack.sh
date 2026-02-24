@@ -34,7 +34,9 @@ fi
 
 SHARED_FILES=(
     background.js
+    content-shared.js
     content.js
+    content-jira.js
     content.css
     popup.html
     popup.js

@@ -3,8 +3,7 @@
 
   const jiraUrlInput = document.getElementById("jiraUrl");
   const confluenceUrlInput = document.getElementById("confluenceUrl");
-  const testCasePrefixInput = document.getElementById("testCasePrefix");
-  const testRunPrefixInput = document.getElementById("testRunPrefix");
+  const projectKeyInput = document.getElementById("projectKey");
   const saveBtn = document.getElementById("saveBtn");
   const testBtn = document.getElementById("testBtn");
   const statusMessage = document.getElementById("statusMessage");
@@ -47,13 +46,14 @@
     if (data.settings) {
       jiraUrlInput.value = data.settings.jiraUrl || "";
       confluenceUrlInput.value = data.settings.confluenceUrl || "";
-      testCasePrefixInput.value = data.settings.testCasePrefix || "";
-      testRunPrefixInput.value = data.settings.testRunPrefix || "";
+      projectKeyInput.value = data.settings.projectKey
+        || (data.settings.testCasePrefix || "").replace(/-T$/, "")
+        || "";
     }
   }
 
   function clearInputErrors() {
-    for (const input of [jiraUrlInput, confluenceUrlInput, testCasePrefixInput, testRunPrefixInput]) {
+    for (const input of [jiraUrlInput, confluenceUrlInput, projectKeyInput]) {
       input.classList.remove("rhelper-options-input-error");
     }
   }
@@ -64,8 +64,7 @@
 
     const jiraUrl = normalizeUrl(jiraUrlInput.value.trim());
     const confluenceUrl = normalizeUrl(confluenceUrlInput.value.trim());
-    const testCasePrefix = testCasePrefixInput.value.trim();
-    const testRunPrefix = testRunPrefixInput.value.trim();
+    const projectKey = projectKeyInput.value.trim();
 
     let hasError = false;
 
@@ -77,12 +76,8 @@
       confluenceUrlInput.classList.add("rhelper-options-input-error");
       hasError = true;
     }
-    if (!testCasePrefix) {
-      testCasePrefixInput.classList.add("rhelper-options-input-error");
-      hasError = true;
-    }
-    if (!testRunPrefix) {
-      testRunPrefixInput.classList.add("rhelper-options-input-error");
+    if (!projectKey) {
+      projectKeyInput.classList.add("rhelper-options-input-error");
       hasError = true;
     }
 
@@ -114,7 +109,7 @@
     jiraUrlInput.value = jiraUrl;
     confluenceUrlInput.value = confluenceUrl;
 
-    const settings = { jiraUrl, confluenceUrl, testCasePrefix, testRunPrefix };
+    const settings = { jiraUrl, confluenceUrl, projectKey };
     await chrome.storage.local.set({ settings });
 
     try {

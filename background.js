@@ -9,13 +9,16 @@ const CWS_STORE_URL = `https://chromewebstore.google.com/detail/${CWS_EXTENSION_
 
 const testRunCache = new Map();
 const attachmentsCache = new Map();
+const testCaseCache = new Map();
 const inFlightResults = new Map();
+const inFlightTestCases = new Map();
 let cachedCurrentUser = null;
 
 const cacheLog = [];
 const CACHE_LOG_MAX = 500;
 
 const CONTENT_SCRIPT_ID = "rhelper-content-script";
+const JIRA_CONTENT_SCRIPT_ID = "rhelper-jira-content-script";
 
 function logCache(action, details) {
   cacheLog.push({ ts: Date.now(), action, details });
@@ -39,6 +42,8 @@ function setCache(cache, key, data) {
     persistCache("testRunCache", testRunCache);
   } else if (cache === attachmentsCache) {
     persistCache("attachmentsCache", attachmentsCache);
+  } else if (cache === testCaseCache) {
+    persistCache("testCaseCache", testCaseCache);
   }
 }
 
@@ -53,8 +58,8 @@ async function persistCache(name, map) {
 
 async function restoreCaches() {
   try {
-    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "currentUser"]);
-    if (data.testRunCache || data.attachmentsCache) {
+    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "testCaseCache", "currentUser"]);
+    if (data.testRunCache || data.attachmentsCache || data.testCaseCache) {
       const now = Date.now();
       let expired = 0;
       if (data.testRunCache) {
@@ -75,13 +80,23 @@ async function restoreCaches() {
           }
         }
       }
+      if (data.testCaseCache) {
+        for (const [key, value] of Object.entries(data.testCaseCache)) {
+          if (value && value.ts && now - value.ts <= CACHE_TTL) {
+            testCaseCache.set(key, value);
+          } else {
+            expired++;
+          }
+        }
+      }
       if (data.currentUser && data.currentUser.ts && now - data.currentUser.ts <= CACHE_TTL) {
         cachedCurrentUser = data.currentUser.data;
       }
-      logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", expired: " + expired);
+      logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", expired: " + expired);
       if (expired > 0) {
         persistCache("testRunCache", testRunCache);
         persistCache("attachmentsCache", attachmentsCache);
+        persistCache("testCaseCache", testCaseCache);
       }
     } else {
       logCache("RESTORE", "storage empty");
@@ -97,6 +112,7 @@ async function loadSettings() {
     JIRA_BASE = data.settings.jiraUrl;
     logCache("SETTINGS", "jiraUrl=" + JIRA_BASE);
     await registerContentScript(data.settings.confluenceUrl);
+    await registerJiraContentScript(data.settings.jiraUrl);
   } else {
     JIRA_BASE = "";
     logCache("SETTINGS", "not configured");
@@ -273,7 +289,7 @@ async function registerContentScript(confluenceUrl) {
     await chrome.scripting.registerContentScripts([{
       id: CONTENT_SCRIPT_ID,
       matches: [matchPattern],
-      js: ["content.js"],
+      js: ["content-shared.js", "content.js"],
       css: ["content.css"],
       allFrames: true,
       persistAcrossSessions: true,
@@ -282,6 +298,40 @@ async function registerContentScript(confluenceUrl) {
     logCache("REGISTER", "content script for " + matchPattern);
   } catch (e) {
     logCache("REGISTER_ERR", e.message);
+  }
+}
+
+async function registerJiraContentScript(jiraUrl) {
+  if (!jiraUrl) return;
+
+  let matchPattern;
+  try {
+    const url = new URL(jiraUrl);
+    matchPattern = url.origin + "/secure/Tests.jspa*";
+  } catch (e) {
+    logCache("REGISTER_ERR", "bad jiraUrl: " + e.message);
+    return;
+  }
+
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [JIRA_CONTENT_SCRIPT_ID] });
+  } catch (e) {
+    // not registered yet — that's fine
+  }
+
+  try {
+    await chrome.scripting.registerContentScripts([{
+      id: JIRA_CONTENT_SCRIPT_ID,
+      matches: [matchPattern],
+      js: ["content-shared.js", "content-jira.js"],
+      css: ["content.css"],
+      allFrames: false,
+      persistAcrossSessions: true,
+      runAt: "document_idle",
+    }]);
+    logCache("REGISTER", "jira content script for " + matchPattern);
+  } catch (e) {
+    logCache("REGISTER_ERR", "jira: " + e.message);
   }
 }
 
@@ -388,7 +438,77 @@ async function fetchAttachments(testResultId) {
   }
 }
 
+async function fetchTestCaseResults(testCaseKey) {
+  ensureConfigured();
+
+  const cached = getCached(testCaseCache, testCaseKey);
+  if (cached) {
+    logCache("TC_HIT", testCaseKey);
+    return cached;
+  }
+
+  if (inFlightTestCases.has(testCaseKey)) {
+    logCache("TC_IN_FLIGHT", testCaseKey);
+    return inFlightTestCases.get(testCaseKey);
+  }
+
+  logCache("TC_FETCH", testCaseKey);
+  const promise = (async () => {
+    const url = `${JIRA_BASE}/rest/tests/1.0/testcase/${testCaseKey}/testresults?fields=id,key,comment,status`;
+    const resp = await fetch(url, { credentials: "include" });
+    checkAuthResponse(resp, "Ошибка загрузки результатов тест-кейса");
+    const raw = await resp.json();
+    const data = Array.isArray(raw) ? raw : (raw.data || raw.results || raw.values || []);
+    logCache("TC_FETCHED", testCaseKey + " → " + data.length + " results");
+    setCache(testCaseCache, testCaseKey, data);
+    return data;
+  })();
+
+  inFlightTestCases.set(testCaseKey, promise);
+  try {
+    return await promise;
+  } catch (err) {
+    logCache("TC_FETCH_ERR", testCaseKey + ": " + err.message);
+    throw err;
+  } finally {
+    inFlightTestCases.delete(testCaseKey);
+  }
+}
+
+async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttachments) {
+  const results = await fetchTestCaseResults(testCaseKey);
+
+  const result = results.find((r) => r.key === executionKey || r.testResultKey === executionKey);
+  if (!result) {
+    return { found: false, comment: null, attachments: [], status: null };
+  }
+
+  let attachments = [];
+  if (includeAttachments && result.id) {
+    try {
+      attachments = await fetchAttachments(result.id);
+    } catch (e) {
+      // Attachments fetch failed, return result without them
+    }
+  }
+
+  return {
+    found: true,
+    comment: result.comment || null,
+    status: result.status || null,
+    attachments: attachments || [],
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "getTestCaseResults") {
+    initReady
+      .then(() => handleGetTestCaseResults(message.testCaseKey, message.executionKey, message.includeAttachments !== false))
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.action === "getTestResult") {
     initReady
       .then(() => handleGetTestResult(message.testRunKey, message.testCaseKey, message.includeAttachments !== false))
@@ -423,12 +543,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       let storageBytesUsed = 0;
       if (typeof chrome.storage.local.getBytesInUse === 'function') {
-        storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache"]);
+        storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache", "testCaseCache"]);
       }
       sendResponse({
         testRuns,
         testRunCacheSize: testRunCache.size,
         attachmentsCacheSize: attachmentsCache.size,
+        testCaseCacheSize: testCaseCache.size,
         inFlightCount: inFlightResults.size,
         storageBytesUsed,
         name: manifest.name,
@@ -469,11 +590,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "clearCache") {
     initReady.then(() => {
-      logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size);
+      logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size);
       testRunCache.clear();
       attachmentsCache.clear();
+      testCaseCache.clear();
       cachedCurrentUser = null;
-      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "currentUser"]);
+      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "testCaseCache", "currentUser"]);
       sendResponse({ success: true });
     });
     return true;
