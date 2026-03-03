@@ -122,6 +122,46 @@
     }
   }
 
+  // ===== In-progress cells =====
+
+  async function loadInProgress() {
+    const section = document.getElementById("inProgressSection");
+    const countEl = document.getElementById("inProgressCount");
+    const listEl = document.getElementById("inProgressList");
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return;
+
+    let resp;
+    try {
+      resp = await chrome.tabs.sendMessage(tab.id, { action: "getInProgressCells" });
+    } catch (e) {
+      return;
+    }
+
+    if (!resp || !resp.cells || resp.cells.length === 0) {
+      section.hidden = true;
+      return;
+    }
+
+    section.hidden = false;
+    countEl.textContent = resp.cells.length;
+    listEl.textContent = "";
+    resp.cells.forEach((num, i) => {
+      if (i > 0) listEl.appendChild(document.createTextNode(", "));
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = "rhelper-popup-inprogress-link";
+      link.textContent = num;
+      link.addEventListener("click", async (e) => {
+        e.preventDefault();
+        await chrome.tabs.sendMessage(tab.id, { action: "scrollToCell", cellNumber: num });
+        window.close();
+      });
+      listEl.appendChild(link);
+    });
+  }
+
   // ===== Prefetch button =====
 
   async function sendToTab(tabId, msg) {
@@ -345,4 +385,5 @@
   });
 
   loadStatus();
+  loadInProgress();
 })();

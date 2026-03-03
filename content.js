@@ -583,6 +583,16 @@
 
   // ===== Message listener for popup =====
 
+  function collectInProgressCells(doc, username, results) {
+    const cells = doc.querySelectorAll('td[data-highlight-colour="#ffe380"]');
+    cells.forEach((cell) => {
+      if (cell.classList.contains("rhelper-painter-" + username)) {
+        const num = extractTestCaseNumber(cell.textContent.trim());
+        if (num) results.push(num);
+      }
+    });
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "getPageTestRunKeys") {
       const keys = collectTestRunKeys(document);
@@ -593,6 +603,56 @@
         } catch (e) { /* cross-origin */ }
       });
       sendResponse({ keys: Array.from(keys) });
+    }
+
+    if (message.action === "scrollToCell") {
+      const num = message.cellNumber;
+      let target = null;
+
+      function findCell(doc) {
+        if (target) return;
+        const cells = doc.querySelectorAll('td[data-highlight-colour="#ffe380"]');
+        for (const cell of cells) {
+          if (cell.textContent.trim() === num) { target = cell; return; }
+        }
+      }
+
+      findCell(document);
+      if (!target) {
+        document.querySelectorAll("iframe").forEach((iframe) => {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (doc) findCell(doc);
+          } catch (e) { /* cross-origin */ }
+        });
+      }
+
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("rhelper-flash");
+        setTimeout(() => target.classList.remove("rhelper-flash"), 1500);
+      }
+      sendResponse({ found: !!target });
+    }
+
+    if (message.action === "getInProgressCells") {
+      (async () => {
+        const username = await ensureCurrentUser();
+        if (!username) {
+          sendResponse({ username: null, cells: [] });
+          return;
+        }
+        const cells = [];
+        collectInProgressCells(document, username, cells);
+        document.querySelectorAll("iframe").forEach((iframe) => {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (doc) collectInProgressCells(doc, username, cells);
+          } catch (e) { /* cross-origin */ }
+        });
+        sendResponse({ username, cells });
+      })();
+      return true;
     }
   });
 })();
