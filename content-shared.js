@@ -111,6 +111,7 @@
     const onMore = opts && opts.onMore;
     const painterName = opts && opts.painterName;
     const projectKey = (opts && opts.projectKey) || "BT";
+    const testCaseKey = opts && opts.testCaseKey;
     const escapedKey = projectKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     const tooltip = document.createElement("div");
@@ -197,6 +198,14 @@
       }
 
       if (commentFragment.childNodes.length === 0) {
+        if (testCaseKey) {
+          const keySpan = document.createElement("span");
+          keySpan.className = "rhelper-tooltip-testo-link";
+          keySpan.dataset.copy = testCaseKey;
+          keySpan.textContent = testCaseKey;
+          commentFragment.appendChild(keySpan);
+          commentFragment.appendChild(document.createTextNode(" "));
+        }
         const text = excerpt.length > COMMENT_PREVIEW_LENGTH
           ? excerpt.substring(0, COMMENT_PREVIEW_LENGTH) + "..."
           : excerpt;

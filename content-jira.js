@@ -69,6 +69,7 @@
       const tooltip = R.buildTooltipContent(resp, {
         onMore: () => showPopup(link),
         projectKey: PROJECT_KEY,
+        testCaseKey,
       });
 
       // Position to the right of the link

@@ -210,6 +210,7 @@
         onMore: () => showPopup(cell),
         painterName,
         projectKey: PROJECT_KEY,
+        testCaseKey: keys.testCaseKey,
       });
 
       mountTooltip(tooltip, cell);
