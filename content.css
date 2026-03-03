@@ -64,6 +64,17 @@
   text-decoration: underline;
 }
 
+.rhelper-tooltip-bug-link {
+  color: #a31545 !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.rhelper-tooltip-bug-link:hover {
+  text-decoration: underline !important;
+}
+
 .rhelper-tooltip-more {
   display: block;
   width: 100%;

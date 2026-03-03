@@ -107,6 +107,43 @@
 
   // ===== Tooltip building =====
 
+  function linkifyBugsInDom(root, jiraBase) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    const re = /\bbug\s+([A-Z]+-\d+)/gi;
+    for (const node of nodes) {
+      re.lastIndex = 0;
+      if (!re.test(node.textContent)) continue;
+      const frag = linkifyBugs(node.textContent, jiraBase);
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  function linkifyBugs(text, jiraBase) {
+    const frag = document.createDocumentFragment();
+    const re = /\bbug\s+([A-Z]+-\d+)/gi;
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) {
+        frag.appendChild(document.createTextNode(text.substring(last, m.index)));
+      }
+      const a = document.createElement("a");
+      a.className = "rhelper-tooltip-bug-link";
+      a.href = (jiraBase || "") + "/browse/" + m[1];
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = m[0];
+      frag.appendChild(a);
+      last = re.lastIndex;
+    }
+    if (last < text.length) {
+      frag.appendChild(document.createTextNode(text.substring(last)));
+    }
+    return frag;
+  }
+
   function buildTooltipContent(resp, opts) {
     const onMore = opts && opts.onMore;
     const painterName = opts && opts.painterName;
@@ -334,6 +371,7 @@
       while (commentDoc.body.firstChild) {
         commentDiv.appendChild(document.adoptNode(commentDoc.body.firstChild));
       }
+      linkifyBugsInDom(commentDiv, jiraBase);
       commentSection.appendChild(commentDiv);
     } else {
       const emptyDiv = document.createElement("div");
