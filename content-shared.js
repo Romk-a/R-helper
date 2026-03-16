@@ -271,6 +271,14 @@
         commentFragment.appendChild(document.createTextNode(text));
       }
     }
+    if (!commentFragment && testCaseKey) {
+      commentFragment = document.createDocumentFragment();
+      const keySpan = document.createElement("span");
+      keySpan.className = "rhelper-tooltip-testo-link";
+      keySpan.dataset.copy = testCaseKey;
+      keySpan.textContent = testCaseKey;
+      commentFragment.appendChild(keySpan);
+    }
 
     // Painter name (Confluence-specific, optional)
     if (painterName) {
