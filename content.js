@@ -348,6 +348,7 @@
     const palette = document.createElement("div");
     palette.className = "rhelper-color-palette";
     palette.setAttribute("data-mce-bogus", "all");
+    R.applyThemeToElement(palette);
 
     PALETTE_COLORS.forEach(({ color, title }) => {
       const swatch = document.createElement("div");

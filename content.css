@@ -458,76 +458,41 @@
 
 /* ===== Dark theme adaptation ===== */
 @media (prefers-color-scheme: dark) {
-  .rhelper-popup {
-    background: #1e1e1e;
-    color: #e0e0e0;
-  }
-
-  .rhelper-popup-header {
-    border-bottom-color: #333;
-  }
-
-  .rhelper-popup-title {
-    color: #e0e0e0;
-  }
-
-  .rhelper-popup-title a {
-    color: #79b8ff;
-  }
-
-  .rhelper-popup-close {
-    color: #aaa;
-  }
-
-  .rhelper-popup-close:hover {
-    background: #333;
-    color: #fff;
-  }
-
-  .rhelper-popup-comment {
-    color: #ccc;
-  }
-
-  .rhelper-error-highlight {
-    color: #ff8a80;
-  }
-
-  .rhelper-testo-link {
-    color: #79b8ff;
-    border-bottom-color: #79b8ff;
-  }
-
-  .rhelper-testo-link:hover {
-    color: #9ecbff;
-  }
-
-  .rhelper-popup-section-title {
-    color: #999;
-  }
-
-  .rhelper-attachment-item {
-    background: #2a2a2a;
-    border-color: #444;
-  }
-
-  .rhelper-attachment-name {
-    color: #e0e0e0;
-  }
-
-  .rhelper-tooltip-vm {
-    color: #79b8ff;
-    background: #1c2d41;
-  }
-
-  .rhelper-color-palette {
-    background: #2a2a2a;
-    border-color: #444;
-  }
-
-  .rhelper-color-remove {
-    background: #2a2a2a;
-  }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup { background: #1e1e1e; color: #e0e0e0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-header { border-bottom-color: #333; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-title { color: #e0e0e0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-title a { color: #79b8ff; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-close { color: #aaa; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-close:hover { background: #333; color: #fff; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-comment { color: #ccc; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-error-highlight { color: #ff8a80; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-testo-link { color: #79b8ff; border-bottom-color: #79b8ff; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-testo-link:hover { color: #9ecbff; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-section-title { color: #999; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-attachment-item { background: #2a2a2a; border-color: #444; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-attachment-name { color: #e0e0e0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-tooltip-vm { color: #79b8ff; background: #1c2d41; }
+  .rhelper-color-palette:not([data-theme="light"]) { background: #2a2a2a; border-color: #444; }
+  .rhelper-color-palette:not([data-theme="light"]) .rhelper-color-remove { background: #2a2a2a; }
 }
+
+/* Forced dark theme */
+.rhelper-overlay[data-theme="dark"] .rhelper-popup { background: #1e1e1e; color: #e0e0e0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-header { border-bottom-color: #333; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-title { color: #e0e0e0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-title a { color: #79b8ff; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-close { color: #aaa; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-close:hover { background: #333; color: #fff; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-comment { color: #ccc; }
+.rhelper-overlay[data-theme="dark"] .rhelper-error-highlight { color: #ff8a80; }
+.rhelper-overlay[data-theme="dark"] .rhelper-testo-link { color: #79b8ff; border-bottom-color: #79b8ff; }
+.rhelper-overlay[data-theme="dark"] .rhelper-testo-link:hover { color: #9ecbff; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-section-title { color: #999; }
+.rhelper-overlay[data-theme="dark"] .rhelper-attachment-item { background: #2a2a2a; border-color: #444; }
+.rhelper-overlay[data-theme="dark"] .rhelper-attachment-name { color: #e0e0e0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-tooltip-vm { color: #79b8ff; background: #1c2d41; }
+.rhelper-color-palette[data-theme="dark"] { background: #2a2a2a; border-color: #444; }
+.rhelper-color-palette[data-theme="dark"] .rhelper-color-remove { background: #2a2a2a; }
 
 /* ===== Flash animation for scrollToCell ===== */
 @keyframes rhelper-flash-anim {

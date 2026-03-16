@@ -6,6 +6,27 @@
   const HOVER_DELAY = 300;
   const COMMENT_PREVIEW_LENGTH = 200;
 
+  // ===== Theme =====
+
+  let currentTheme = "auto";
+  chrome.storage.local.get("theme", (data) => {
+    currentTheme = data.theme || "auto";
+  });
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.theme) {
+      currentTheme = changes.theme.newValue || "auto";
+      document.querySelectorAll("[data-rhelper-themed]").forEach((el) => {
+        if (currentTheme === "auto") el.removeAttribute("data-theme");
+        else el.setAttribute("data-theme", currentTheme);
+      });
+    }
+  });
+
+  function applyThemeToElement(el) {
+    el.setAttribute("data-rhelper-themed", "1");
+    if (currentTheme !== "auto") el.setAttribute("data-theme", currentTheme);
+  }
+
   // ===== Utilities =====
 
   function stripHtml(html) {
@@ -89,6 +110,7 @@
     const overlay = document.createElement("div");
     overlay.className = "rhelper-lightbox";
     overlay.setAttribute("data-mce-bogus", "all");
+    applyThemeToElement(overlay);
     overlay.addEventListener("click", removeLightbox);
 
     const img = document.createElement("img");
@@ -299,6 +321,7 @@
     const overlay = document.createElement("div");
     overlay.className = "rhelper-overlay";
     overlay.setAttribute("data-mce-bogus", "all");
+    applyThemeToElement(overlay);
 
     const popup = document.createElement("div");
     popup.className = "rhelper-popup";
@@ -537,5 +560,6 @@
     buildTooltipContent,
     createPopupShell,
     renderPopupContent,
+    applyThemeToElement,
   };
 })();
