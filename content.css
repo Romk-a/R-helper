@@ -54,6 +54,27 @@
   margin-bottom: 4px;
 }
 
+.rhelper-tooltip-field {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e0e0e0;
+}
+
+.rhelper-tooltip-field-label {
+  color: #888;
+}
+
+.rhelper-tooltip-field ul {
+  margin: 2px 0 0 16px;
+  padding: 0;
+  list-style: disc;
+}
+
+.rhelper-tooltip-field li {
+  margin: 1px 0;
+}
+
 .rhelper-tooltip-testo-link {
   color: #79b8ff;
   text-decoration: none;

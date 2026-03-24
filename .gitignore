@@ -2,6 +2,7 @@
 *.zip
 *.crx
 *.xpi
+*.py
 key.pem
 .env
 CLAUDE.md

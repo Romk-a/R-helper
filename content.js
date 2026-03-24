@@ -88,6 +88,23 @@
     };
   }
 
+  // ===== "Актуализация" table detection =====
+
+  const testCasePrefixRe = new RegExp("^" + TEST_CASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\d+$");
+
+  function isTestCaseKeyCell(cell) {
+    if (cell.tagName !== "TD" && cell.tagName !== "TH") return false;
+    return testCasePrefixRe.test(cell.textContent.trim());
+  }
+
+  function detectCell(cell) {
+    if (!cell || (cell.tagName !== "TD" && cell.tagName !== "TH")) return null;
+    const keys = getKeysFromCell(cell);
+    if (keys) return { type: "testRun", ...keys };
+    if (isTestCaseKeyCell(cell)) return { type: "testCase", testCaseKey: cell.textContent.trim() };
+    return null;
+  }
+
   // ===== Communication with background =====
 
   async function ensureCurrentUser() {
@@ -294,6 +311,76 @@
     });
   }
 
+  // ===== Test case info tooltip (Актуализация tables) =====
+
+  function formatEstimatedTime(ms) {
+    if (!ms || ms <= 0) return null;
+    const totalMin = Math.round(ms / 60000);
+    if (totalMin < 60) return totalMin + " мин";
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return m > 0 ? h + " ч " + m + " мин" : h + " ч";
+  }
+
+  function showTestCaseTooltip(cell, testCaseKey) {
+    removeTooltip();
+
+    const requestId = ++tooltipRequestId;
+
+    R.sendMessage({
+      action: "getTestCaseInfo",
+      testCaseKey,
+    }).then((resp) => {
+      if (requestId !== tooltipRequestId) return;
+      if (!resp || resp.error) return;
+
+      const tooltip = document.createElement("div");
+      tooltip.className = "rhelper-tooltip";
+      tooltip.setAttribute("data-mce-bogus", "all");
+
+      // Painter badge
+      const painterClass = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
+      if (painterClass && cell.hasAttribute("data-highlight-colour")) {
+        const painterSpan = document.createElement("span");
+        painterSpan.className = "rhelper-tooltip-painter";
+        painterSpan.textContent = painterClass.substring("rhelper-painter-".length);
+        tooltip.appendChild(painterSpan);
+      }
+
+      const fields = [];
+      const cf = resp.customFields || {};
+      if (cf["Режим ОС"]) fields.push(["Режим ОС", cf["Режим ОС"]]);
+      if (cf["Package"]) fields.push(["Package", cf["Package"]]);
+      if (resp.objective) fields.push(["Objective", resp.objective]);
+      if (resp.component) fields.push(["Component", resp.component]);
+      if (resp.folder) fields.push(["Folder", resp.folder]);
+      const time = formatEstimatedTime(resp.estimatedTime);
+      if (time) fields.push(["Время", time]);
+
+      for (const [label, value] of fields) {
+        const div = document.createElement("div");
+        div.className = "rhelper-tooltip-field";
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "rhelper-tooltip-field-label";
+        labelSpan.textContent = label + ": ";
+        div.appendChild(labelSpan);
+        const valueSpan = document.createElement("span");
+        valueSpan.innerHTML = value;
+        div.appendChild(valueSpan);
+        tooltip.appendChild(div);
+      }
+
+      if (fields.length === 0 && !tooltip.hasChildNodes()) {
+        const emptySpan = document.createElement("span");
+        emptySpan.style.color = "#999";
+        emptySpan.textContent = "Нет данных";
+        tooltip.appendChild(emptySpan);
+      }
+
+      mountTooltip(tooltip, cell);
+    });
+  }
+
   // ===== Color Palette =====
 
   const PALETTE_COLORS = [
@@ -417,14 +504,19 @@
 
   function handleMouseOver(e) {
     const cell = e.target.closest("td, th");
-    if (!cell || !isTestCaseCell(cell)) return;
+    const detected = detectCell(cell);
+    if (!detected) return;
 
     currentHighlightedCell = cell;
     positionHighlightOverlay(cell);
 
     if (hoverTimeout) { clearTimeout(hoverTimeout); hoverTimeout = null; }
     hoverTimeout = setTimeout(() => {
-      showTooltip(cell, e);
+      if (detected.type === "testRun") {
+        showTooltip(cell, e);
+      } else {
+        showTestCaseTooltip(cell, detected.testCaseKey);
+      }
     }, R.HOVER_DELAY);
   }
 
@@ -456,7 +548,7 @@
 
   function handleMouseDown(e) {
     const cell = e.target.closest("td, th");
-    if (!cell || !isTestCaseCell(cell)) return;
+    if (!detectCell(cell)) return;
     if (isEditorContext(cell)) {
       e.preventDefault();
     }
@@ -464,29 +556,43 @@
 
   function handleClick(e) {
     const cell = e.target.closest("td, th");
-    if (!cell || !isTestCaseCell(cell)) {
+    const detected = detectCell(cell);
+    if (!detected) {
       clearCellHighlight();
       removeColorPalette();
       return;
     }
 
     if (isEditorContext(cell)) {
+      if (detected.type === "testCase" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const link = cell.querySelector("a[href]");
+        if (link) (window.top || window).open(link.href, "_blank");
+        return;
+      }
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
         showPopup(cell);
       } else if (currentColorPalette && currentPaletteCell === cell) {
         removeColorPalette();
-        showTooltip(cell, e);
+        if (detected.type === "testRun") {
+          showTooltip(cell, e);
+        }
       } else {
         showColorPalette(cell, e);
       }
       return;
     }
 
-    e.preventDefault();
-    e.stopPropagation();
-    showPopup(cell);
+    // View mode
+    if (detected.type === "testRun") {
+      e.preventDefault();
+      e.stopPropagation();
+      showPopup(cell);
+    }
+    // testCase в просмотре → переход по ссылке (не блокируем)
   }
 
   function handleKeyDown(e) {
@@ -588,9 +694,13 @@
   function collectInProgressCells(doc, username, results) {
     const cells = doc.querySelectorAll('td[data-highlight-colour="#ffe380"]');
     cells.forEach((cell) => {
-      if (cell.classList.contains("rhelper-painter-" + username)) {
-        const num = extractTestCaseNumber(cell.textContent.trim());
-        if (num) results.push(num);
+      if (!cell.classList.contains("rhelper-painter-" + username)) return;
+      const text = cell.textContent.trim();
+      const num = extractTestCaseNumber(text);
+      if (num) {
+        results.push(num);
+      } else if (isTestCaseKeyCell(cell)) {
+        results.push(text);
       }
     });
   }

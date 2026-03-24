@@ -10,8 +10,10 @@ const CWS_STORE_URL = `https://chromewebstore.google.com/detail/${CWS_EXTENSION_
 const testRunCache = new Map();
 const attachmentsCache = new Map();
 const testCaseCache = new Map();
+const testCaseInfoCache = new Map();
 const inFlightResults = new Map();
 const inFlightTestCases = new Map();
+const inFlightTestCaseInfo = new Map();
 let cachedCurrentUser = null;
 
 const cacheLog = [];
@@ -44,6 +46,8 @@ function setCache(cache, key, data) {
     persistCache("attachmentsCache", attachmentsCache);
   } else if (cache === testCaseCache) {
     persistCache("testCaseCache", testCaseCache);
+  } else if (cache === testCaseInfoCache) {
+    persistCache("testCaseInfoCache", testCaseInfoCache);
   }
 }
 
@@ -58,8 +62,8 @@ async function persistCache(name, map) {
 
 async function restoreCaches() {
   try {
-    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "testCaseCache", "currentUser"]);
-    if (data.testRunCache || data.attachmentsCache || data.testCaseCache) {
+    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser"]);
+    if (data.testRunCache || data.attachmentsCache || data.testCaseCache || data.testCaseInfoCache) {
       const now = Date.now();
       let expired = 0;
       if (data.testRunCache) {
@@ -89,14 +93,24 @@ async function restoreCaches() {
           }
         }
       }
+      if (data.testCaseInfoCache) {
+        for (const [key, value] of Object.entries(data.testCaseInfoCache)) {
+          if (value && value.ts && now - value.ts <= CACHE_TTL) {
+            testCaseInfoCache.set(key, value);
+          } else {
+            expired++;
+          }
+        }
+      }
       if (data.currentUser && data.currentUser.ts && now - data.currentUser.ts <= CACHE_TTL) {
         cachedCurrentUser = data.currentUser.data;
       }
-      logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", expired: " + expired);
+      logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size + ", expired: " + expired);
       if (expired > 0) {
         persistCache("testRunCache", testRunCache);
         persistCache("attachmentsCache", attachmentsCache);
         persistCache("testCaseCache", testCaseCache);
+        persistCache("testCaseInfoCache", testCaseInfoCache);
       }
     } else {
       logCache("RESTORE", "storage empty");
@@ -500,7 +514,51 @@ async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttach
   };
 }
 
+async function fetchTestCaseInfo(testCaseKey) {
+  ensureConfigured();
+
+  const cached = getCached(testCaseInfoCache, testCaseKey);
+  if (cached) {
+    logCache("TCI_HIT", testCaseKey);
+    return cached;
+  }
+
+  if (inFlightTestCaseInfo.has(testCaseKey)) {
+    logCache("TCI_IN_FLIGHT", testCaseKey);
+    return inFlightTestCaseInfo.get(testCaseKey);
+  }
+
+  logCache("TCI_FETCH", testCaseKey);
+  const promise = (async () => {
+    const url = `${JIRA_BASE}/rest/atm/1.0/testcase/${testCaseKey}`;
+    const resp = await fetch(url, { credentials: "include" });
+    checkAuthResponse(resp, "Ошибка загрузки информации о тест-кейсе");
+    const data = await resp.json();
+    logCache("TCI_FETCHED", testCaseKey);
+    setCache(testCaseInfoCache, testCaseKey, data);
+    return data;
+  })();
+
+  inFlightTestCaseInfo.set(testCaseKey, promise);
+  try {
+    return await promise;
+  } catch (err) {
+    logCache("TCI_FETCH_ERR", testCaseKey + ": " + err.message);
+    throw err;
+  } finally {
+    inFlightTestCaseInfo.delete(testCaseKey);
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "getTestCaseInfo") {
+    initReady
+      .then(() => fetchTestCaseInfo(message.testCaseKey))
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.action === "getTestCaseResults") {
     initReady
       .then(() => handleGetTestCaseResults(message.testCaseKey, message.executionKey, message.includeAttachments !== false))
@@ -543,13 +601,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       let storageBytesUsed = 0;
       if (typeof chrome.storage.local.getBytesInUse === 'function') {
-        storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache", "testCaseCache"]);
+        storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache"]);
       }
       sendResponse({
         testRuns,
         testRunCacheSize: testRunCache.size,
         attachmentsCacheSize: attachmentsCache.size,
         testCaseCacheSize: testCaseCache.size,
+        testCaseInfoCacheSize: testCaseInfoCache.size,
         inFlightCount: inFlightResults.size,
         storageBytesUsed,
         name: manifest.name,
@@ -590,12 +649,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "clearCache") {
     initReady.then(() => {
-      logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size);
+      logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size);
       testRunCache.clear();
       attachmentsCache.clear();
       testCaseCache.clear();
+      testCaseInfoCache.clear();
       cachedCurrentUser = null;
-      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "testCaseCache", "currentUser"]);
+      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser"]);
       sendResponse({ success: true });
     });
     return true;
