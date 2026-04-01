@@ -57,6 +57,10 @@
       <span class="rhelper-popup-stat-value" id="testRunCount">—</span>
     </div>
     <div class="rhelper-popup-stat-row">
+      <span class="rhelper-popup-stat-label">Тест-кейсы в кэше</span>
+      <span class="rhelper-popup-stat-value" id="testCaseCount">—</span>
+    </div>
+    <div class="rhelper-popup-stat-row">
       <span class="rhelper-popup-stat-label">Вложения в кэше</span>
       <span class="rhelper-popup-stat-value" id="attachmentsCount">—</span>
     </div>
@@ -70,24 +74,24 @@
     </div>
   </div>
 
-  <div id="testRunList" class="rhelper-popup-list" hidden>
-    <div class="rhelper-popup-list-title">Закэшированные прогоны</div>
-    <ul id="testRunItems"></ul>
-  </div>
-
   <div id="emptyMessage" class="rhelper-popup-empty" hidden>Кэш пуст</div>
 
   <button id="prefetchBtn" class="rhelper-popup-prefetch-btn">Закэшировать прогоны страницы</button>
 
   <button id="clearBtn" class="rhelper-popup-clear-btn">Очистить кэш</button>
 
-  <button id="logBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">История кэша</button>
+  <button id="logBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Логи</button>
 
   <div id="logSection" class="rhelper-popup-log" hidden>
     <div id="logContent" class="rhelper-popup-log-content"></div>
   </div>
 
   <button id="settingsBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Настройки</button>
+
+  <div id="testRunList" class="rhelper-popup-list" hidden>
+    <div class="rhelper-popup-list-title">Закэшированные прогоны</div>
+    <ul id="testRunItems"></ul>
+  </div>
   </div>
 
   <div id="toast" class="rhelper-popup-toast" hidden></div>

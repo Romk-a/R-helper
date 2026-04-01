@@ -78,6 +78,7 @@
     banner.hidden = true;
     mainContent.hidden = false;
     document.getElementById("testRunCount").textContent = resp.testRunCacheSize;
+    document.getElementById("testCaseCount").textContent = resp.testCaseCacheSize;
     document.getElementById("attachmentsCount").textContent = resp.attachmentsCacheSize;
     document.getElementById("inFlightCount").textContent = resp.inFlightCount;
     document.getElementById("storageSize").textContent = formatBytes(resp.storageBytesUsed || 0);
