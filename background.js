@@ -491,11 +491,28 @@ async function fetchTestCaseResults(testCaseKey) {
 
 async function fetchExecutionTraceLinks(executionKey) {
   ensureConfigured();
-  const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=traceLinks`;
+  const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=traceLinks,testScriptResults(traceLinks)`;
   const resp = await fetch(url, { credentials: "include" });
   checkAuthResponse(resp, "Ошибка загрузки связанных задач");
   const data = await resp.json();
-  return data.traceLinks || [];
+  const seen = new Set();
+  const all = [];
+  const collect = (links) => {
+    if (!links) return;
+    for (const link of links) {
+      if (!seen.has(link.issueId)) {
+        seen.add(link.issueId);
+        all.push(link);
+      }
+    }
+  };
+  collect(data.traceLinks);
+  if (data.testScriptResults) {
+    for (const step of data.testScriptResults) {
+      collect(step.traceLinks);
+    }
+  }
+  return all;
 }
 
 async function fetchIssueInfo(issueId) {
