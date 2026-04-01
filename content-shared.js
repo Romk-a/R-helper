@@ -278,6 +278,10 @@
       keySpan.dataset.copy = testCaseKey;
       keySpan.textContent = testCaseKey;
       commentFragment.appendChild(keySpan);
+      const noComment = document.createElement("span");
+      noComment.style.color = "#999";
+      noComment.textContent = " Нет комментария";
+      commentFragment.appendChild(noComment);
     }
 
     // Painter name (Confluence-specific, optional)
