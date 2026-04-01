@@ -141,7 +141,7 @@ download_xpi() {
 
     local XPI_DEST_DIR="$SHARE_DIR"
     AMO_API_URL="https://addons.mozilla.org/api/v5/addons/addon/r-helper/"
-    XPI_TIMEOUT=30
+    XPI_TIMEOUT=120
 
     echo ""
     echo "Ожидание появления .xpi на AMO (таймаут ${XPI_TIMEOUT}с)..."

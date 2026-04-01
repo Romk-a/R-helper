@@ -305,6 +305,33 @@
       tooltip.appendChild(commentDiv);
     }
 
+    // Linked bugs
+    const jiraBase = opts && opts.jiraBase;
+    if (resp.issueLinks && resp.issueLinks.length > 0 && jiraBase) {
+      const bugsDiv = document.createElement("div");
+      bugsDiv.className = "rhelper-tooltip-bugs";
+      const bugsTitle = document.createElement("div");
+      bugsTitle.className = "rhelper-tooltip-bugs-title";
+      bugsTitle.textContent = "Прикрепленные задачи:";
+      bugsDiv.appendChild(bugsTitle);
+      const ul = document.createElement("ul");
+      ul.className = "rhelper-tooltip-bugs-list";
+      for (const issue of resp.issueLinks) {
+        const li = document.createElement("li");
+        const bugLink = document.createElement("a");
+        const isProjectBug = issue.key.startsWith(projectKey + "-");
+        bugLink.className = isProjectBug ? "rhelper-tooltip-bug-link" : "rhelper-tooltip-ext-link";
+        bugLink.href = jiraBase + "/browse/" + issue.key;
+        bugLink.target = "_blank";
+        bugLink.rel = "noopener";
+        bugLink.textContent = issue.key + " " + issue.summary;
+        li.appendChild(bugLink);
+        ul.appendChild(li);
+      }
+      bugsDiv.appendChild(ul);
+      tooltip.appendChild(bugsDiv);
+    }
+
     appendMoreButton();
 
     // Set up .testo link copy handler

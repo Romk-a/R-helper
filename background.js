@@ -489,12 +489,30 @@ async function fetchTestCaseResults(testCaseKey) {
   }
 }
 
+async function fetchExecutionTraceLinks(executionKey) {
+  ensureConfigured();
+  const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=traceLinks`;
+  const resp = await fetch(url, { credentials: "include" });
+  checkAuthResponse(resp, "Ошибка загрузки связанных задач");
+  const data = await resp.json();
+  return data.traceLinks || [];
+}
+
+async function fetchIssueInfo(issueId) {
+  ensureConfigured();
+  const url = `${JIRA_BASE}/rest/api/2/issue/${issueId}?fields=summary`;
+  const resp = await fetch(url, { credentials: "include" });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return { key: data.key, summary: data.fields.summary };
+}
+
 async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttachments) {
   const results = await fetchTestCaseResults(testCaseKey);
 
   const result = results.find((r) => r.key === executionKey || r.testResultKey === executionKey);
   if (!result) {
-    return { found: false, comment: null, attachments: [], status: null };
+    return { found: false, comment: null, attachments: [], status: null, issueLinks: [] };
   }
 
   let attachments = [];
@@ -506,11 +524,25 @@ async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttach
     }
   }
 
+  let issueLinks = [];
+  try {
+    const traceLinks = await fetchExecutionTraceLinks(executionKey);
+    if (traceLinks.length > 0) {
+      const resolved = await Promise.all(
+        traceLinks.map((link) => fetchIssueInfo(link.issueId).catch(() => null))
+      );
+      issueLinks = resolved.filter(Boolean);
+    }
+  } catch (e) {
+    // Trace links fetch failed, return result without them
+  }
+
   return {
     found: true,
     comment: result.comment || null,
     status: result.status || null,
     attachments: attachments || [],
+    issueLinks,
   };
 }
 

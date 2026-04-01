@@ -85,6 +85,42 @@
   text-decoration: underline;
 }
 
+.rhelper-tooltip-bugs {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rhelper-tooltip-bugs-title {
+  color: #999;
+  margin-bottom: 3px;
+}
+
+.rhelper-tooltip-bugs-list {
+  margin: 2px 0 0 16px;
+  padding: 0;
+  list-style: disc;
+}
+
+.rhelper-tooltip-bugs-list li {
+  margin: 2px 0;
+}
+
+.rhelper-tooltip-bugs .rhelper-tooltip-bug-link {
+  color: #ff6b8a !important;
+}
+
+.rhelper-tooltip-ext-link {
+  color: #79b8ff !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+
+.rhelper-tooltip-ext-link:hover {
+  text-decoration: underline !important;
+}
+
 .rhelper-tooltip-bug-link {
   color: #a31545 !important;
   font-weight: 700 !important;

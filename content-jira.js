@@ -70,6 +70,7 @@
         onMore: () => showPopup(link),
         projectKey: PROJECT_KEY,
         testCaseKey,
+        jiraBase: JIRA_BASE,
       });
 
       // Position to the right of the link
