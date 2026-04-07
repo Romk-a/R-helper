@@ -53,7 +53,12 @@ function setCache(cache, key, data) {
 
 async function persistCache(name, map) {
   try {
-    await chrome.storage.local.set({ [name]: Object.fromEntries(map) });
+    const plain = {};
+    for (const [key, entry] of map) {
+      const data = entry.data instanceof Map ? [...entry.data] : entry.data;
+      plain[key] = { data, ts: entry.ts };
+    }
+    await chrome.storage.local.set({ [name]: plain });
     logCache("PERSIST", name + ": " + map.size + " entries");
   } catch (e) {
     logCache("PERSIST_ERR", name + ": " + e.message);
@@ -69,7 +74,8 @@ async function restoreCaches() {
       if (data.testRunCache) {
         for (const [key, value] of Object.entries(data.testRunCache)) {
           if (value && value.ts && now - value.ts <= CACHE_TTL) {
-            testRunCache.set(key, value);
+            const d = Array.isArray(value.data) ? new Map(value.data) : value.data;
+            testRunCache.set(key, { data: d, ts: value.ts });
           } else {
             expired++;
           }
@@ -411,9 +417,10 @@ async function fetchTestRunResults(testRunKey) {
     const resp = await fetch(url, { credentials: "include" });
     checkAuthResponse(resp, "Ошибка загрузки результатов");
     const data = await resp.json();
-    logCache("FETCHED", testRunKey + " → " + (Array.isArray(data) ? data.length : 0) + " results");
-    setCache(testRunCache, testRunKey, data);
-    return data;
+    const map = new Map(Array.isArray(data) ? data.map((r) => [r.testCaseKey, r]) : []);
+    logCache("FETCHED", testRunKey + " → " + map.size + " results");
+    setCache(testRunCache, testRunKey, map);
+    return map;
   })();
 
   inFlightResults.set(testRunKey, promise);
@@ -646,7 +653,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const testRuns = [];
       for (const [key, entry] of testRunCache) {
         const results = entry && entry.data;
-        testRuns.push({ key, resultsCount: Array.isArray(results) ? results.length : 0 });
+        testRuns.push({ key, resultsCount: results instanceof Map ? results.size : 0 });
       }
       let storageBytesUsed = 0;
       if (typeof chrome.storage.local.getBytesInUse === 'function') {
@@ -677,7 +684,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     initReady.then(async () => {
       try {
         const results = await fetchTestRunResults(message.testRunKey);
-        sendResponse({ success: true, resultsCount: Array.isArray(results) ? results.length : 0 });
+        sendResponse({ success: true, resultsCount: results.size });
       } catch (err) {
         sendResponse({ error: err.message });
       }
@@ -753,7 +760,7 @@ async function handleGetCurrentUser() {
 async function handleGetTestResult(testRunKey, testCaseKey, includeAttachments) {
   const results = await fetchTestRunResults(testRunKey);
 
-  const result = results.find((r) => r.testCaseKey === testCaseKey);
+  const result = results.get(testCaseKey);
   if (!result) {
     return { found: false, comment: null, attachments: [], status: null };
   }

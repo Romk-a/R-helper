@@ -183,6 +183,8 @@ download_xpi() {
         if curl -sL --max-time 30 -o "$XPI_DEST_DIR/$XPI_FILENAME" "$XPI_URL"; then
             echo "Сохранено: $XPI_DEST_DIR/$XPI_FILENAME"
             cleanup_old_versions "r[_-]helper-*.xpi" "$XPI_FILENAME"
+            ln -sf "$XPI_FILENAME" "$XPI_DEST_DIR/r-helper-latest.xpi"
+            echo "Ссылка: $XPI_DEST_DIR/r-helper-latest.xpi -> $XPI_FILENAME"
             ls -lh "$XPI_DEST_DIR/$XPI_FILENAME"
         else
             echo "ОШИБКА: не удалось скачать .xpi"
