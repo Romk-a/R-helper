@@ -459,49 +459,43 @@ async function fetchAttachments(testResultId) {
   }
 }
 
-async function fetchTestCaseResults(testCaseKey) {
+async function fetchExecutionResult(executionKey) {
   ensureConfigured();
 
-  const cached = getCached(testCaseCache, testCaseKey);
+  const cached = getCached(testCaseCache, executionKey);
   if (cached) {
-    logCache("TC_HIT", testCaseKey);
+    logCache("TC_HIT", executionKey);
     return cached;
   }
 
-  if (inFlightTestCases.has(testCaseKey)) {
-    logCache("TC_IN_FLIGHT", testCaseKey);
-    return inFlightTestCases.get(testCaseKey);
+  if (inFlightTestCases.has(executionKey)) {
+    logCache("TC_IN_FLIGHT", executionKey);
+    return inFlightTestCases.get(executionKey);
   }
 
-  logCache("TC_FETCH", testCaseKey);
+  logCache("TC_FETCH", executionKey);
   const promise = (async () => {
-    const url = `${JIRA_BASE}/rest/tests/1.0/testcase/${testCaseKey}/testresults?fields=id,key,comment,status`;
+    const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=id,comment,status,traceLinks,testScriptResults(traceLinks)`;
     const resp = await fetch(url, { credentials: "include" });
-    checkAuthResponse(resp, "Ошибка загрузки результатов тест-кейса");
-    const raw = await resp.json();
-    const data = Array.isArray(raw) ? raw : (raw.data || raw.results || raw.values || []);
-    logCache("TC_FETCHED", testCaseKey + " → " + data.length + " results");
-    setCache(testCaseCache, testCaseKey, data);
+    checkAuthResponse(resp, "Ошибка загрузки результата выполнения");
+    const data = await resp.json();
+    logCache("TC_FETCHED", executionKey);
+    setCache(testCaseCache, executionKey, data);
     return data;
   })();
 
-  inFlightTestCases.set(testCaseKey, promise);
+  inFlightTestCases.set(executionKey, promise);
   try {
     return await promise;
   } catch (err) {
-    logCache("TC_FETCH_ERR", testCaseKey + ": " + err.message);
+    logCache("TC_FETCH_ERR", executionKey + ": " + err.message);
     throw err;
   } finally {
-    inFlightTestCases.delete(testCaseKey);
+    inFlightTestCases.delete(executionKey);
   }
 }
 
-async function fetchExecutionTraceLinks(executionKey) {
-  ensureConfigured();
-  const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=traceLinks,testScriptResults(traceLinks)`;
-  const resp = await fetch(url, { credentials: "include" });
-  checkAuthResponse(resp, "Ошибка загрузки связанных задач");
-  const data = await resp.json();
+function collectTraceLinks(data) {
   const seen = new Set();
   const all = [];
   const collect = (links) => {
@@ -532,10 +526,10 @@ async function fetchIssueInfo(issueId) {
 }
 
 async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttachments) {
-  const results = await fetchTestCaseResults(testCaseKey);
-
-  const result = results.find((r) => r.key === executionKey || r.testResultKey === executionKey);
-  if (!result) {
+  let result;
+  try {
+    result = await fetchExecutionResult(executionKey);
+  } catch (e) {
     return { found: false, comment: null, attachments: [], status: null, issueLinks: [] };
   }
 
@@ -550,7 +544,7 @@ async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttach
 
   let issueLinks = [];
   try {
-    const traceLinks = await fetchExecutionTraceLinks(executionKey);
+    const traceLinks = collectTraceLinks(result);
     if (traceLinks.length > 0) {
       const resolved = await Promise.all(
         traceLinks.map((link) => fetchIssueInfo(link.issueId).catch(() => null))
