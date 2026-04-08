@@ -64,6 +64,11 @@
     if (showUpdate) {
       document.getElementById("latestVersionText").textContent = "v" + versionResp.latestVersion;
       updateBanner.hidden = false;
+      const isFirefox = typeof chrome.runtime.getBrowserInfo === "function";
+      if (!isFirefox) {
+        document.getElementById("openStoreFromUpdateBanner").title =
+          "Откроется страница расширений браузера.\nНажмите кнопку «Обновить» в верхней части страницы.";
+      }
     } else {
       updateBanner.hidden = true;
     }
@@ -287,11 +292,16 @@
   });
 
   document.getElementById("openStoreFromUpdateBanner").addEventListener("click", async () => {
-    const versionResp = await sendMessage({ action: "getVersionCheck" });
-    if (versionResp && versionResp.storeUrl) {
-      chrome.tabs.create({ url: versionResp.storeUrl });
-      window.close();
+    const isFirefox = typeof chrome.runtime.getBrowserInfo === "function";
+    if (isFirefox) {
+      const versionResp = await sendMessage({ action: "getVersionCheck" });
+      if (versionResp && versionResp.storeUrl) {
+        chrome.tabs.create({ url: versionResp.storeUrl });
+      }
+    } else {
+      chrome.tabs.create({ url: "chrome://extensions/" });
     }
+    window.close();
   });
 
   // ===== Debug mode (Ctrl+click on version) =====
