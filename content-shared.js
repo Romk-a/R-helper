@@ -292,6 +292,15 @@
       tooltip.appendChild(painterSpan);
     }
 
+    // Test run name (inline, placed before VM pills)
+    if (resp.testRunName) {
+      const parenMatch = resp.testRunName.match(/\(([^)]+)\)/);
+      const runSpan = document.createElement("span");
+      runSpan.className = "rhelper-tooltip-run-name";
+      runSpan.textContent = parenMatch ? parenMatch[1].trim() : resp.testRunName;
+      tooltip.appendChild(runSpan);
+    }
+
     // VM names
     const vmNames = resp.comment ? extractVmNames(resp.comment) : [];
     for (const n of vmNames) {

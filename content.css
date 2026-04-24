@@ -15,6 +15,19 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+.rhelper-tooltip-run-name {
+  display: inline-block;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5e2ca5;
+  background: #eae6ff;
+  border-radius: 3px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .rhelper-tooltip-status {
   display: inline-block;
   padding: 2px 8px;
@@ -41,6 +54,11 @@
   padding: 2px 8px;
   margin-left: 6px;
   vertical-align: middle;
+}
+
+.rhelper-tooltip-vm:first-child,
+.rhelper-tooltip-run-name:first-child {
+  margin-left: 0;
 }
 
 .rhelper-tooltip-painter {

@@ -475,7 +475,7 @@ async function fetchExecutionResult(executionKey) {
 
   logCache("TC_FETCH", executionKey);
   const promise = (async () => {
-    const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=id,comment,status,traceLinks,testScriptResults(traceLinks)`;
+    const url = `${JIRA_BASE}/rest/tests/1.0/testresult/${executionKey}?fields=id,comment,status,traceLinks,testScriptResults(traceLinks),testRun(name)`;
     const resp = await fetch(url, { credentials: "include" });
     checkAuthResponse(resp, "Ошибка загрузки результата выполнения");
     const data = await resp.json();
@@ -561,6 +561,7 @@ async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttach
     status: result.status || null,
     attachments: attachments || [],
     issueLinks,
+    testRunName: result.testRun?.name || null,
   };
 }
 
