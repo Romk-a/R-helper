@@ -11,6 +11,8 @@
   if (!PROJECT_KEY) return;
   const TEST_CASE_PREFIX = PROJECT_KEY + "-T";
   const TEST_RUN_PREFIX = PROJECT_KEY + "-C";
+  const PAINT_HISTORY_ENABLED = settingsData.settings.paintHistoryEnabled === true;
+  const HISTORY_LIMIT = 20;
 
   let currentTooltip = null;
   let hoverTimeout = null;
@@ -412,6 +414,31 @@
     cell.removeAttribute("title");
   }
 
+  function pushHistoryClass(cell, colorOrNull, user) {
+    if (!PAINT_HISTORY_ENABLED) return;
+    if (!isEditorContext(cell)) return;
+    if (!user) return;
+
+    const ts = Date.now();
+    const colorSlot = colorOrNull === null
+      ? "000000"
+      : String(colorOrNull).replace(/^#/, "").toLowerCase();
+    const newClass = `rhh-${ts}-${colorSlot}-${user}`;
+
+    const existing = [...cell.classList].filter(c => c.startsWith("rhh-"));
+    for (const c of existing) cell.classList.remove(c);
+
+    const all = [...existing, newClass]
+      .sort((a, b) => {
+        const ta = Number(a.split("-")[1]) || 0;
+        const tb = Number(b.split("-")[1]) || 0;
+        return ta - tb;
+      })
+      .slice(-HISTORY_LIMIT);
+
+    for (const c of all) cell.classList.add(c);
+  }
+
   function removeColorPalette() {
     if (currentColorPalette) {
       if (currentColorPalette._outsideListener) {
@@ -442,9 +469,11 @@
       swatch.className = "rhelper-color-swatch";
       swatch.style.backgroundColor = color;
       swatch.dataset.color = color;
-      swatch.addEventListener("click", (ev) => {
+      swatch.addEventListener("click", async (ev) => {
         ev.stopPropagation();
+        const user = await ensureCurrentUser();
         applyHighlight(cell, color, title);
+        pushHistoryClass(cell, color, user);
         removeColorPalette();
       });
       palette.appendChild(swatch);
@@ -453,9 +482,11 @@
     const removeSwatch = document.createElement("div");
     removeSwatch.className = "rhelper-color-swatch rhelper-color-remove";
     removeSwatch.title = "Убрать заливку";
-    removeSwatch.addEventListener("click", (ev) => {
+    removeSwatch.addEventListener("click", async (ev) => {
       ev.stopPropagation();
+      const user = await ensureCurrentUser();
       removeHighlight(cell);
+      pushHistoryClass(cell, null, user);
       removeColorPalette();
     });
     palette.appendChild(removeSwatch);

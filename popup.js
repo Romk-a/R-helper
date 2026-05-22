@@ -317,7 +317,25 @@
     debugSection.hidden = !debugSection.hidden;
     if (!debugSection.hidden) {
       await updateDebugInfo();
+      await syncPaintHistoryToggle();
     }
+  });
+
+  const paintHistoryToggle = document.getElementById("debugPaintHistoryToggle");
+
+  async function syncPaintHistoryToggle() {
+    const data = await chrome.storage.local.get("settings");
+    paintHistoryToggle.checked = !!(data.settings && data.settings.paintHistoryEnabled);
+  }
+
+  paintHistoryToggle.addEventListener("change", async () => {
+    const data = await chrome.storage.local.get("settings");
+    const settings = data.settings || {};
+    settings.paintHistoryEnabled = paintHistoryToggle.checked;
+    await chrome.storage.local.set({ settings });
+    showToast(paintHistoryToggle.checked
+      ? "История покрасок включена\nПерезагрузите вкладку Confluence"
+      : "История покрасок выключена\nПерезагрузите вкладку Confluence");
   });
 
   async function updateDebugInfo() {
