@@ -246,6 +246,37 @@
   text-decoration: underline;
 }
 
+.rhelper-popup-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rhelper-popup-subtitle {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6b778c;
+}
+
+.rhelper-popup-subtitle:empty {
+  display: none;
+}
+
+.rhelper-popup-package {
+  font-size: 12px;
+  color: #6b778c;
+  overflow-wrap: anywhere;
+}
+
+.rhelper-popup-package-value {
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.rhelper-popup-package:empty {
+  display: none;
+}
+
 .rhelper-popup-close {
   background: none;
   border: none;
@@ -537,6 +568,8 @@
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-header { border-bottom-color: #333; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-title { color: #e0e0e0; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-title a { color: #79b8ff; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-subtitle { color: #a0a0a0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-package { color: #a0a0a0; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-close { color: #aaa; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-close:hover { background: #333; color: #fff; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-comment { color: #ccc; }
@@ -556,6 +589,8 @@
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-header { border-bottom-color: #333; }
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-title { color: #e0e0e0; }
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-title a { color: #79b8ff; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-subtitle { color: #a0a0a0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-package { color: #a0a0a0; }
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-close { color: #aaa; }
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-close:hover { background: #333; color: #fff; }
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-comment { color: #ccc; }

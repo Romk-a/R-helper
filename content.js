@@ -278,11 +278,42 @@
     allRunsLink.textContent = "Все запуски теста";
     titleSpan.appendChild(allRunsLink);
 
-    const { overlay, body, setRemovePopup } = R.createPopupShell(titleSpan);
+    const titleBlock = document.createElement("div");
+    titleBlock.className = "rhelper-popup-title-block";
+    titleBlock.appendChild(titleSpan);
+    const subtitleDiv = document.createElement("div");
+    subtitleDiv.className = "rhelper-popup-subtitle";
+    titleBlock.appendChild(subtitleDiv);
+    const packageDiv = document.createElement("div");
+    packageDiv.className = "rhelper-popup-package";
+    titleBlock.appendChild(packageDiv);
+
+    const { overlay, body, setRemovePopup } = R.createPopupShell(titleBlock);
 
     document.body.appendChild(overlay);
     currentPopup = overlay;
     setRemovePopup(removePopup);
+
+    R.sendMessage({
+      action: "getTestCaseInfo",
+      testCaseKey: keys.testCaseKey,
+    }).then((info) => {
+      if (!currentPopup || currentPopup !== overlay) return;
+      if (info && !info.error) {
+        if (info.name) subtitleDiv.textContent = info.name;
+        const pkg = info.customFields && info.customFields["Package"];
+        if (pkg) {
+          const labelSpan = document.createElement("span");
+          labelSpan.className = "rhelper-popup-package-label";
+          labelSpan.textContent = "Пакеты: ";
+          const valueSpan = document.createElement("span");
+          valueSpan.className = "rhelper-popup-package-value";
+          valueSpan.textContent = pkg;
+          packageDiv.appendChild(labelSpan);
+          packageDiv.appendChild(valueSpan);
+        }
+      }
+    });
 
     R.sendMessage({
       action: "getTestResult",
