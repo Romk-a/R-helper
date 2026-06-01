@@ -92,6 +92,38 @@ cleanup_old_versions() {
     fi
 }
 
+# --- AMO API (авторизованные запросы по JWT) ---
+# Публичный API (/addons/addon/r-helper/) показывает только последнюю
+# ОДОБРЕННУЮ версию и сильно отстаёт, пока новая версия на модерации.
+# Поэтому проверку «есть ли уже такая версия» и поиск .xpi делаем через
+# авторизованный эндпоинт /versions/, который видит все версии сразу.
+AMO_SLUG="r-helper"
+AMO_API_BASE="https://addons.mozilla.org/api/v5"
+
+# Генерирует короткоживущий (180с) JWT для AMO API
+amo_jwt() {
+    local now exp jti header payload h p sig
+    now=$(date +%s); exp=$((now + 180))
+    jti=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    header='{"alg":"HS256","typ":"JWT"}'
+    payload=$(printf '{"iss":"%s","jti":"%s","iat":%s,"exp":%s}' "$AMO_JWT_ISSUER" "$jti" "$now" "$exp")
+    h=$(printf '%s' "$header"  | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    p=$(printf '%s' "$payload" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    sig=$(printf '%s' "$h.$p" | openssl dgst -sha256 -hmac "$AMO_JWT_SECRET" -binary | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    printf '%s.%s.%s' "$h" "$p" "$sig"
+}
+
+# GET к AMO API с авторизацией. $1 — путь начиная с /addons/...
+amo_api() {
+    curl -s -H "Authorization: JWT $(amo_jwt)" "$AMO_API_BASE$1"
+}
+
+# Возвращает JSON-объект версии $VERSION (любой канал/статус), либо пусто
+amo_version_json() {
+    amo_api "/addons/addon/$AMO_SLUG/versions/?filter=all_with_unlisted" \
+        | jq -c --arg v "$VERSION" '(.results // [])[] | select(.version == $v)' 2>/dev/null
+}
+
 # --- Firefox (AMO) ---
 publish_firefox() {
     if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
@@ -101,17 +133,12 @@ publish_firefox() {
 
     echo "Публикация на AMO..."
 
-    # Проверяем текущую версию на AMO
-    echo "  Проверка текущей версии на AMO..."
-    local amo_response amo_version
-    amo_response=$(curl -s "https://addons.mozilla.org/api/v5/addons/addon/r-helper/" 2>/dev/null || echo "")
-    amo_version=$(echo "$amo_response" | grep -o '"version":"[^"]*"' | head -1 | sed 's/"version":"\([^"]*\)"/\1/')
-
-    if [ "$amo_version" = "$VERSION" ]; then
-        echo "Firefox: версия $VERSION уже опубликована на AMO, пропускаю"
+    # Проверяем ВСЕ версии (включая те, что на модерации)
+    echo "  Проверка версии $VERSION на AMO..."
+    if [ -n "$(amo_version_json)" ]; then
+        echo "Firefox: версия $VERSION уже загружена на AMO, пропускаю sign"
         return 0
     fi
-    echo "  AMO: v${amo_version:-?}, загружаем v${VERSION}..."
 
     # Распаковываем zip во временную папку для web-ext
     local tmpdir
@@ -120,12 +147,24 @@ publish_firefox() {
 
     unzip -q "$FIREFOX_OUTPUT" -d "$tmpdir/firefox"
 
-    if ! npx --yes web-ext sign \
+    # Ловим вывод web-ext: если предпроверка не сработала и AMO вернёт
+    # конфликт «версия уже существует» — считаем это успехом, не ошибкой.
+    local log="$tmpdir/sign.log" rc
+    set +e; set -o pipefail
+    npx --yes web-ext sign \
         --source-dir="$tmpdir/firefox" \
         --artifacts-dir="$tmpdir/artifacts" \
         --api-key="$AMO_JWT_ISSUER" \
         --api-secret="$AMO_JWT_SECRET" \
-        --channel=listed; then
+        --channel=listed 2>&1 | tee "$log"
+    rc=$?
+    set +o pipefail; set -e
+
+    if [ $rc -ne 0 ]; then
+        if grep -qiE "already exists|Conflict" "$log"; then
+            echo "Firefox: версия $VERSION уже существует на AMO — считаю загруженной"
+            return 0
+        fi
         echo "ОШИБКА: web-ext sign завершился с ошибкой"
         return 1
     fi
@@ -139,58 +178,43 @@ download_xpi() {
         return 0
     fi
 
-    local XPI_DEST_DIR="$SHARE_DIR"
-    AMO_API_URL="https://addons.mozilla.org/api/v5/addons/addon/r-helper/"
-    XPI_TIMEOUT=120
+    local timeout="${XPI_TIMEOUT:-240}" start now elapsed vjson url status
+    start=$(date +%s)
 
     echo ""
-    echo "Ожидание появления .xpi на AMO (таймаут ${XPI_TIMEOUT}с)..."
+    echo "Ожидание подписанного .xpi на AMO (таймаут ${timeout}с)..."
 
-    XPI_URL=""
-    START_TIME=$(date +%s)
-
+    url=""
     while true; do
-        CURRENT_TIME=$(date +%s)
-        ELAPSED=$((CURRENT_TIME - START_TIME))
-
-        if [ $ELAPSED -ge $XPI_TIMEOUT ]; then
-            echo "Таймаут: не удалось получить .xpi за ${XPI_TIMEOUT}с"
-            XPI_URL=""
-            break
-        fi
-
-        # Запрашиваем API
-        API_RESPONSE=$(curl -s "$AMO_API_URL" 2>/dev/null || echo "")
-
-        if [ -n "$API_RESPONSE" ]; then
-            # Проверяем версию и получаем URL
-            AMO_VERSION=$(echo "$API_RESPONSE" | grep -o '"version":"[^"]*"' | head -1 | sed 's/"version":"\([^"]*\)"/\1/')
-            XPI_URL=$(echo "$API_RESPONSE" | grep -o '"url":"https://addons.mozilla.org/firefox/downloads/file/[^"]*\.xpi[^"]*"' | head -1 | sed 's/"url":"\([^"]*\)"/\1/')
-
-            if [ "$AMO_VERSION" = "$VERSION" ] && [ -n "$XPI_URL" ]; then
-                echo "Найдена версия $AMO_VERSION на AMO"
+        vjson=$(amo_version_json)
+        if [ -n "$vjson" ]; then
+            url=$(echo "$vjson"    | jq -r '.file.url    // empty')
+            status=$(echo "$vjson" | jq -r '.file.status // "?"')
+            if [ -n "$url" ]; then
+                echo "Найден файл версии $VERSION на AMO (статус: $status)"
                 break
             fi
         fi
 
-        sleep 2
+        now=$(date +%s); elapsed=$((now - start))
+        if [ "$elapsed" -ge "$timeout" ]; then
+            echo "Файл версии $VERSION ещё не подписан (вероятно, на модерации)."
+            echo "Это не ошибка — запусти ./publish.sh --firefox позже, он докачает .xpi."
+            return 0
+        fi
+        sleep 5
     done
 
-    if [ -n "$XPI_URL" ]; then
-        XPI_FILENAME="${EXTENSION_NAME}-${VERSION}.xpi"
-        echo "Скачивание: $XPI_URL"
-
-        if curl -sL --max-time 30 -o "$XPI_DEST_DIR/$XPI_FILENAME" "$XPI_URL"; then
-            echo "Сохранено: $XPI_DEST_DIR/$XPI_FILENAME"
-            cleanup_old_versions "r[_-]helper-*.xpi" "$XPI_FILENAME"
-            ln -sf "$XPI_FILENAME" "$XPI_DEST_DIR/r-helper-latest.xpi"
-            echo "Ссылка: $XPI_DEST_DIR/r-helper-latest.xpi -> $XPI_FILENAME"
-            ls -lh "$XPI_DEST_DIR/$XPI_FILENAME"
-        else
-            echo "ОШИБКА: не удалось скачать .xpi"
-        fi
+    local fname="${EXTENSION_NAME}-${VERSION}.xpi" dest="$SHARE_DIR/${EXTENSION_NAME}-${VERSION}.xpi"
+    echo "Скачивание: $url"
+    if curl -fsSL --max-time 60 -o "$dest" "$url"; then
+        echo "Сохранено: $dest"
+        cleanup_old_versions "r[_-]helper-*.xpi" "$fname"
+        ln -sf "$fname" "$SHARE_DIR/r-helper-latest.xpi"
+        echo "Ссылка: $SHARE_DIR/r-helper-latest.xpi -> $fname"
+        ls -lh "$dest"
     else
-        echo "Не удалось получить ссылку на .xpi (возможно, версия ещё на модерации)"
+        echo "ОШИБКА: не удалось скачать .xpi ($url)"
     fi
 }
 
