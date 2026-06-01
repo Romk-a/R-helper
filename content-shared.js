@@ -169,6 +169,7 @@
   function buildTooltipContent(resp, opts) {
     const onMore = opts && opts.onMore;
     const painterName = opts && opts.painterName;
+    const painterTime = opts && opts.painterTime;
     const projectKey = (opts && opts.projectKey) || "BT";
     const testCaseKey = opts && opts.testCaseKey;
     const escapedKey = projectKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -289,6 +290,7 @@
       const painterSpan = document.createElement("span");
       painterSpan.className = "rhelper-tooltip-painter";
       painterSpan.textContent = painterName;
+      if (painterTime) painterSpan.title = painterTime;
       tooltip.appendChild(painterSpan);
     }
 

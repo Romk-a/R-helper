@@ -11,7 +11,6 @@
   if (!PROJECT_KEY) return;
   const TEST_CASE_PREFIX = PROJECT_KEY + "-T";
   const TEST_RUN_PREFIX = PROJECT_KEY + "-C";
-  const PAINT_HISTORY_ENABLED = settingsData.settings.paintHistoryEnabled === true;
   const HISTORY_LIMIT = 20;
 
   let currentTooltip = null;
@@ -228,6 +227,7 @@
       const tooltip = R.buildTooltipContent(resp, {
         onMore: () => showPopup(cell),
         painterName,
+        painterTime: painterName ? getLastPaintTime(cell) : null,
         projectKey: PROJECT_KEY,
         testCaseKey: keys.testCaseKey,
       });
@@ -377,6 +377,8 @@
         const painterSpan = document.createElement("span");
         painterSpan.className = "rhelper-tooltip-painter";
         painterSpan.textContent = painterClass.substring("rhelper-painter-".length);
+        const paintTime = getLastPaintTime(cell);
+        if (paintTime) painterSpan.title = paintTime;
         tooltip.appendChild(painterSpan);
       }
 
@@ -446,7 +448,6 @@
   }
 
   function pushHistoryClass(cell, colorOrNull, user) {
-    if (!PAINT_HISTORY_ENABLED) return;
     if (!isEditorContext(cell)) return;
     if (!user) return;
 
@@ -468,6 +469,22 @@
       .slice(-HISTORY_LIMIT);
 
     for (const c of all) cell.classList.add(c);
+  }
+
+  // Возвращает абсолютное время последней покраски ячейки (из rhh-* классов)
+  // в виде строки для title, либо null если истории нет.
+  function getLastPaintTime(cell) {
+    let maxTs = 0;
+    for (const cls of cell.classList) {
+      if (!cls.startsWith("rhh-")) continue;
+      const ts = Number(cls.split("-")[1]) || 0;
+      if (ts > maxTs) maxTs = ts;
+    }
+    if (!maxTs) return null;
+    return "Покрашено: " + new Date(maxTs).toLocaleString("ru-RU", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
   }
 
   function removeColorPalette() {
