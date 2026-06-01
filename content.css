@@ -28,6 +28,10 @@
   margin-left: 0;
 }
 
+.rhelper-tooltip-badges .rhelper-tooltip-painter {
+  margin-bottom: 0;
+}
+
 .rhelper-tooltip-run-name {
   display: inline-block;
   font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;

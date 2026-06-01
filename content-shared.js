@@ -285,21 +285,21 @@
       commentFragment.appendChild(noComment);
     }
 
-    // Painter name (Confluence-specific, optional)
-    if (painterName) {
-      const painterSpan = document.createElement("span");
-      painterSpan.className = "rhelper-tooltip-painter";
-      painterSpan.textContent = painterName;
-      if (painterTime) painterSpan.title = painterTime;
-      tooltip.appendChild(painterSpan);
-    }
-
-    // Header badges (run name + VM pills) wrapped in a flex row so they wrap
-    // cleanly onto multiple lines without overlapping.
+    // Header badges (painter + run name + VM pills) wrapped in a flex row so they
+    // wrap cleanly onto multiple lines without overlapping.
     const vmNames = resp.comment ? extractVmNames(resp.comment) : [];
-    if (resp.testRunName || vmNames.length > 0) {
+    if (painterName || resp.testRunName || vmNames.length > 0) {
       const badgesRow = document.createElement("div");
       badgesRow.className = "rhelper-tooltip-badges";
+
+      // Painter name (Confluence-specific, optional)
+      if (painterName) {
+        const painterSpan = document.createElement("span");
+        painterSpan.className = "rhelper-tooltip-painter";
+        painterSpan.textContent = painterName;
+        if (painterTime) painterSpan.title = painterTime;
+        badgesRow.appendChild(painterSpan);
+      }
 
       // Test run name (placed before VM pills)
       if (resp.testRunName) {
