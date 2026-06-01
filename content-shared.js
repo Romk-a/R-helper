@@ -292,22 +292,31 @@
       tooltip.appendChild(painterSpan);
     }
 
-    // Test run name (inline, placed before VM pills)
-    if (resp.testRunName) {
-      const parenMatch = resp.testRunName.match(/\(([^)]+)\)/);
-      const runSpan = document.createElement("span");
-      runSpan.className = "rhelper-tooltip-run-name";
-      runSpan.textContent = parenMatch ? parenMatch[1].trim() : resp.testRunName;
-      tooltip.appendChild(runSpan);
-    }
-
-    // VM names
+    // Header badges (run name + VM pills) wrapped in a flex row so they wrap
+    // cleanly onto multiple lines without overlapping.
     const vmNames = resp.comment ? extractVmNames(resp.comment) : [];
-    for (const n of vmNames) {
-      const vmSpan = document.createElement("span");
-      vmSpan.className = "rhelper-tooltip-vm";
-      vmSpan.textContent = n;
-      tooltip.appendChild(vmSpan);
+    if (resp.testRunName || vmNames.length > 0) {
+      const badgesRow = document.createElement("div");
+      badgesRow.className = "rhelper-tooltip-badges";
+
+      // Test run name (placed before VM pills)
+      if (resp.testRunName) {
+        const parenMatch = resp.testRunName.match(/\(([^)]+)\)/);
+        const runSpan = document.createElement("span");
+        runSpan.className = "rhelper-tooltip-run-name";
+        runSpan.textContent = parenMatch ? parenMatch[1].trim() : resp.testRunName;
+        badgesRow.appendChild(runSpan);
+      }
+
+      // VM names
+      for (const n of vmNames) {
+        const vmSpan = document.createElement("span");
+        vmSpan.className = "rhelper-tooltip-vm";
+        vmSpan.textContent = n;
+        badgesRow.appendChild(vmSpan);
+      }
+
+      tooltip.appendChild(badgesRow);
     }
 
     // Comment

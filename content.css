@@ -15,6 +15,19 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+.rhelper-tooltip-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-bottom: 4px;
+}
+
+.rhelper-tooltip-badges .rhelper-tooltip-run-name,
+.rhelper-tooltip-badges .rhelper-tooltip-vm {
+  margin-left: 0;
+}
+
 .rhelper-tooltip-run-name {
   display: inline-block;
   font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
