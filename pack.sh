@@ -42,6 +42,7 @@ SHARED_FILES=(
     popup.js
     popup.css
     theme.js
+    changelog.js
     options.html
     options.js
     options.css

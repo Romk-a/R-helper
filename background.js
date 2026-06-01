@@ -204,7 +204,7 @@ async function checkForUpdates() {
       };
 
       await chrome.storage.local.set({ versionCheck });
-      await setUpdateBadge(updateAvailable);
+      await refreshBadge();
       logCache("VERSION_CHECK", updateAvailable ? "Update available!" : "Up to date");
 
       return versionCheck;
@@ -245,7 +245,7 @@ async function checkForUpdates() {
     };
 
     await chrome.storage.local.set({ versionCheck });
-    await setUpdateBadge(updateAvailable);
+    await refreshBadge();
     logCache("VERSION_CHECK", updateAvailable ? "Update available!" : "Up to date");
 
     return versionCheck;
@@ -278,10 +278,24 @@ async function getCachedVersionCheck() {
   return cached;
 }
 
-async function setUpdateBadge(show) {
-  if (show) {
+// Единый пересчёт бейджа на иконке по состоянию из storage.
+// Приоритет: доступное обновление (красный "!") > непрочитанный «Что нового» (фиолетовая точка).
+async function refreshBadge() {
+  const data = await chrome.storage.local.get(["versionCheck", "lastSeenVersion"]);
+  const updateAvailable = !!(data.versionCheck && data.versionCheck.updateAvailable);
+  const manifestVersion = chrome.runtime.getManifest().version;
+  // «Непрочитано», если последняя просмотренная версия не совпадает с текущей.
+  // Чистая установка не помечается: onInstalled (reason "install") сразу выставляет
+  // lastSeenVersion = текущая. Пустой lastSeenVersion здесь = старый пользователь,
+  // впервые получивший фичу, — ему точку показываем.
+  const whatsNewUnread = data.lastSeenVersion !== manifestVersion;
+
+  if (updateAvailable) {
     await chrome.action.setBadgeText({ text: "!" });
     await chrome.action.setBadgeBackgroundColor({ color: "#e53935" });
+  } else if (whatsNewUnread) {
+    await chrome.action.setBadgeText({ text: "•" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#7e57c2" });
   } else {
     await chrome.action.setBadgeText({ text: "" });
   }
@@ -365,12 +379,22 @@ chrome.alarms.get(VERSION_CHECK_ALARM, (alarm) => {
   }
 });
 
+// При чистой установке помечаем текущую версию как просмотренную, чтобы баннер
+// «Что нового» не показывался новым пользователям. При обновлении ничего не трогаем —
+// баннер покажет заметки новых версий.
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === "install") {
+    await chrome.storage.local.set({ lastSeenVersion: chrome.runtime.getManifest().version });
+    await refreshBadge();
+  }
+});
+
 // Проверка версии при старте (если кэш пустой или устарел) + восстановление badge
 initReady.then(async () => {
+  // Сразу пересчитываем бейдж (покажет «Что нового», даже если проверка обновлений недоступна)
+  await refreshBadge();
   const cached = await getCachedVersionCheck();
-  if (cached) {
-    await setUpdateBadge(cached.updateAvailable);
-  } else {
+  if (!cached) {
     await checkForUpdates();
   }
 });
@@ -735,8 +759,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === "setUpdateBadge") {
-    setUpdateBadge(message.show).then(() => sendResponse({ success: true }));
+  if (message.action === "setUpdateBadge" || message.action === "refreshBadge") {
+    refreshBadge().then(() => sendResponse({ success: true }));
     return true;
   }
 });

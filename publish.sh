@@ -3,9 +3,9 @@
 #
 # Что делает:
 #   1. Проверяет наличие собранных пакетов
-#   2. Загружает Firefox-версию на AMO через web-ext sign
-#   3. Скачивает подписанный .xpi с AMO
-#   4. Загружает и публикует Chrome-версию в Chrome Web Store
+#   2. Загружает и публикует Chrome-версию в Chrome Web Store
+#   3. Загружает Firefox-версию на AMO через web-ext sign
+#   4. Скачивает подписанный .xpi с AMO
 #
 # Требования:
 #   - Собранные пакеты (сначала запусти ./pack.sh)
@@ -194,22 +194,6 @@ download_xpi() {
     fi
 }
 
-if $DO_FIREFOX; then
-    while true; do
-        if publish_firefox; then
-            download_xpi
-            break
-        fi
-        echo ""
-        read -rp "[R]etry / [S]kip? " choice
-        case "$choice" in
-            [rR]) echo "Повтор..."; continue ;;
-            [sS]) echo "Пропускаю публикацию на AMO."; break ;;
-            *) echo "Введи R или S" ;;
-        esac
-    done
-fi
-
 # --- Chrome Web Store ---
 publish_chrome() {
     if [ -z "$CHROME_EXTENSION_ID" ] || [ -z "$CHROME_PUBLISHER_ID" ] || \
@@ -311,6 +295,23 @@ if $DO_CHROME; then
         case "$choice" in
             [rR]) echo "Повтор..."; continue ;;
             [sS]) echo "Пропускаю публикацию в Chrome Web Store."; break ;;
+            *) echo "Введи R или S" ;;
+        esac
+    done
+fi
+
+if $DO_FIREFOX; then
+    echo ""
+    while true; do
+        if publish_firefox; then
+            download_xpi
+            break
+        fi
+        echo ""
+        read -rp "[R]etry / [S]kip? " choice
+        case "$choice" in
+            [rR]) echo "Повтор..."; continue ;;
+            [sS]) echo "Пропускаю публикацию на AMO."; break ;;
             *) echo "Введи R или S" ;;
         esac
     done

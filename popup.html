@@ -28,6 +28,15 @@
     <button id="openStoreFromUpdateBanner" class="rhelper-popup-update-btn">Обновить</button>
   </div>
 
+  <div id="whatsNewBanner" class="rhelper-popup-whatsnew" hidden>
+    <div class="rhelper-popup-whatsnew-header">
+      <span class="rhelper-popup-whatsnew-icon">✨</span>
+      <span class="rhelper-popup-whatsnew-title">Что нового</span>
+      <button id="whatsNewDismiss" class="rhelper-popup-whatsnew-dismiss">Понятно</button>
+    </div>
+    <div id="whatsNewList" class="rhelper-popup-whatsnew-list"></div>
+  </div>
+
   <div id="debugSection" class="rhelper-popup-debug" hidden>
     <div class="rhelper-popup-debug-title">🔧 Debug</div>
     <div class="rhelper-popup-debug-info" id="debugInfo"></div>
@@ -40,7 +49,12 @@
       <button id="debugForceVersionCheck" class="rhelper-popup-debug-btn">Проверить обновления</button>
       <button id="debugShowRaw" class="rhelper-popup-debug-btn">Показать raw данные</button>
       <button id="debugSimulateUpdate" class="rhelper-popup-debug-btn">Симулировать обновление</button>
+      <button id="debugResetWhatsNew" class="rhelper-popup-debug-btn">Сбросить «Что нового»</button>
       <button id="debugFullReset" class="rhelper-popup-debug-btn rhelper-popup-debug-btn-danger">Полный reset</button>
+    </div>
+    <div class="rhelper-popup-debug-row">
+      <input id="debugLastSeenInput" class="rhelper-popup-debug-input" type="text" placeholder="напр. 1.9.0">
+      <button id="debugSetLastSeen" class="rhelper-popup-debug-btn">Задать lastSeenVersion</button>
     </div>
     <pre id="debugRawData" class="rhelper-popup-debug-raw" hidden></pre>
   </div>
@@ -111,6 +125,7 @@
   </div>
 
   <script src="theme.js"></script>
+  <script src="changelog.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

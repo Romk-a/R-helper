@@ -44,6 +44,73 @@
     });
   }
 
+  // Сравнение версий вида "x.y.z": >0 если a новее b, <0 если старше, 0 если равны
+  function compareVersions(a, b) {
+    const pa = String(a).split(".").map(Number);
+    const pb = String(b).split(".").map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d !== 0) return d;
+    }
+    return 0;
+  }
+
+  // Баннер «Что нового»: показывает заметки по версиям новее последней просмотренной
+  async function showWhatsNew() {
+    const banner = document.getElementById("whatsNewBanner");
+    if (!banner || !window.RHELPER_CHANGELOG) return;
+
+    const currentVersion = chrome.runtime.getManifest().version;
+    const data = await chrome.storage.local.get("lastSeenVersion");
+    const lastSeen = data.lastSeenVersion;
+
+    let versions = Object.keys(window.RHELPER_CHANGELOG)
+      .filter((v) => compareVersions(v, currentVersion) <= 0);
+
+    if (lastSeen) {
+      // Показываем всё, что появилось после прошлого просмотра
+      versions = versions.filter((v) => compareVersions(v, lastSeen) > 0);
+    } else {
+      // Первый запуск с этой фичей — показываем заметки текущей версии (если есть)
+      versions = versions.filter((v) => v === currentVersion);
+    }
+
+    if (versions.length === 0) {
+      // Нечего показывать — молча отмечаем версию как просмотренную
+      await chrome.storage.local.set({ lastSeenVersion: currentVersion });
+      await sendMessage({ action: "refreshBadge" });
+      return;
+    }
+
+    versions.sort((a, b) => compareVersions(b, a)); // по убыванию
+
+    const listEl = document.getElementById("whatsNewList");
+    listEl.textContent = "";
+    for (const v of versions) {
+      const verEl = document.createElement("div");
+      verEl.className = "rhelper-popup-whatsnew-version";
+      verEl.textContent = "v" + v;
+      listEl.appendChild(verEl);
+
+      const ul = document.createElement("ul");
+      ul.className = "rhelper-popup-whatsnew-items";
+      for (const item of window.RHELPER_CHANGELOG[v]) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        ul.appendChild(li);
+      }
+      listEl.appendChild(ul);
+    }
+
+    banner.hidden = false;
+
+    document.getElementById("whatsNewDismiss").addEventListener("click", async () => {
+      banner.hidden = true;
+      await chrome.storage.local.set({ lastSeenVersion: currentVersion });
+      await sendMessage({ action: "refreshBadge" });
+    }, { once: true });
+  }
+
   async function loadStatus() {
     const resp = await sendMessage({ action: "getCacheStatus" });
 
@@ -341,6 +408,7 @@
   async function updateDebugInfo() {
     const versionResp = await sendMessage({ action: "getVersionCheck" });
     const manifest = chrome.runtime.getManifest();
+    const stored = await chrome.storage.local.get("lastSeenVersion");
 
     const browser = (typeof chrome.runtime.getBrowserInfo === 'function') ? 'Firefox' : 'Chrome';
     const lines = [
@@ -348,9 +416,12 @@
       `Extension: v${manifest.version}`,
       `Store latest: ${versionResp?.latestVersion || 'N/A'}`,
       `Update available: ${versionResp?.updateAvailable || false}`,
-      `Last check: ${versionResp?.lastCheckTime ? new Date(versionResp.lastCheckTime).toLocaleString('ru-RU') : 'never'}`
+      `Last check: ${versionResp?.lastCheckTime ? new Date(versionResp.lastCheckTime).toLocaleString('ru-RU') : 'never'}`,
+      `What's new seen: ${stored.lastSeenVersion || 'never'}`
     ];
     debugInfo.textContent = lines.join('\n');
+    const input = document.getElementById("debugLastSeenInput");
+    if (input) input.placeholder = stored.lastSeenVersion || "не задано";
   }
 
   document.getElementById("debugResetVersionCache").addEventListener("click", async () => {
@@ -403,6 +474,27 @@
     await sendMessage({ action: "setUpdateBadge", show: true });
   });
 
+  document.getElementById("debugResetWhatsNew").addEventListener("click", async () => {
+    await chrome.storage.local.remove("lastSeenVersion");
+    await sendMessage({ action: "refreshBadge" });
+    await updateDebugInfo();
+    showToast("Отметка «Что нового» сброшена. Откройте попап заново.");
+  });
+
+  document.getElementById("debugSetLastSeen").addEventListener("click", async () => {
+    const input = document.getElementById("debugLastSeenInput");
+    const value = input.value.trim();
+    if (!/^\d+\.\d+\.\d+$/.test(value)) {
+      showToast("Введите версию в формате x.y.z");
+      return;
+    }
+    await chrome.storage.local.set({ lastSeenVersion: value });
+    input.value = "";
+    await sendMessage({ action: "refreshBadge" });
+    await updateDebugInfo();
+    showToast(`lastSeenVersion = ${value}. Откройте попап заново.`);
+  });
+
   document.getElementById("debugFullReset").addEventListener("click", async () => {
     const confirmed = await showConfirm("Удалить ВСЕ данные расширения?\n\nЭто сбросит:\n- Настройки (Jira/Confluence URL)\n- Весь кэш\n- Кэш версии");
     if (!confirmed) return;
@@ -415,4 +507,5 @@
 
   loadStatus();
   loadInProgress();
+  showWhatsNew();
 })();
