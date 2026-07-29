@@ -96,7 +96,21 @@
       ul.className = "rhelper-popup-whatsnew-items";
       for (const item of window.RHELPER_CHANGELOG[v]) {
         const li = document.createElement("li");
-        li.textContent = item;
+        if (typeof item === "string") {
+          li.textContent = item;
+        } else {
+          // Группа пунктов: заголовок + вложенный список
+          li.className = "rhelper-popup-whatsnew-group";
+          li.textContent = item.title;
+          const subUl = document.createElement("ul");
+          subUl.className = "rhelper-popup-whatsnew-subitems";
+          for (const sub of item.items || []) {
+            const subLi = document.createElement("li");
+            subLi.textContent = sub;
+            subUl.appendChild(subLi);
+          }
+          li.appendChild(subUl);
+        }
         ul.appendChild(li);
       }
       listEl.appendChild(ul);
@@ -155,43 +169,39 @@
     document.getElementById("inFlightCount").textContent = resp.inFlightCount;
     document.getElementById("storageSize").textContent = formatBytes(resp.storageBytesUsed || 0);
 
-    const listEl = document.getElementById("testRunList");
     const itemsEl = document.getElementById("testRunItems");
-    const emptyEl = document.getElementById("emptyMessage");
+
+    // Видимостью списка управляет только кнопка «Закэшированные прогоны»,
+    // здесь лишь наполняем его актуальными данными.
+    document.getElementById("emptyMessage").hidden = true;
+    document.getElementById("testRunEmpty").hidden = resp.testRuns.length > 0;
 
     itemsEl.textContent = "";
 
-    if (resp.testRuns.length === 0) {
-      listEl.hidden = true;
-      emptyEl.hidden = false;
-    } else {
-      emptyEl.hidden = true;
-      listEl.hidden = false;
-      for (const run of resp.testRuns) {
-        const li = document.createElement("li");
-        const keySpan = document.createElement("span");
-        keySpan.className = "rhelper-popup-run-key";
-        keySpan.textContent = run.key;
-        const right = document.createElement("span");
-        right.className = "rhelper-popup-run-right";
-        const countSpan = document.createElement("span");
-        countSpan.className = "rhelper-popup-run-count";
-        countSpan.textContent = run.resultsCount + " рез.";
-        const delBtn = document.createElement("button");
-        delBtn.className = "rhelper-popup-run-delete";
-        delBtn.title = "Удалить из кэша";
-        delBtn.textContent = "\u00d7";
-        delBtn.addEventListener("click", async () => {
-          delBtn.disabled = true;
-          await sendMessage({ action: "deleteCacheEntry", testRunKey: run.key });
-          await loadStatus();
-        });
-        right.appendChild(countSpan);
-        right.appendChild(delBtn);
-        li.appendChild(keySpan);
-        li.appendChild(right);
-        itemsEl.appendChild(li);
-      }
+    for (const run of resp.testRuns) {
+      const li = document.createElement("li");
+      const keySpan = document.createElement("span");
+      keySpan.className = "rhelper-popup-run-key";
+      keySpan.textContent = run.key;
+      const right = document.createElement("span");
+      right.className = "rhelper-popup-run-right";
+      const countSpan = document.createElement("span");
+      countSpan.className = "rhelper-popup-run-count";
+      countSpan.textContent = run.resultsCount + " рез.";
+      const delBtn = document.createElement("button");
+      delBtn.className = "rhelper-popup-run-delete";
+      delBtn.title = "Удалить из кэша";
+      delBtn.textContent = "\u00d7";
+      delBtn.addEventListener("click", async () => {
+        delBtn.disabled = true;
+        await sendMessage({ action: "deleteCacheEntry", testRunKey: run.key });
+        await loadStatus();
+      });
+      right.appendChild(countSpan);
+      right.appendChild(delBtn);
+      li.appendChild(keySpan);
+      li.appendChild(right);
+      itemsEl.appendChild(li);
     }
   }
 
@@ -235,7 +245,10 @@
     });
   }
 
-  // ===== Prefetch button =====
+  // Текст кнопки лежит в отдельном span — меняем его, иначе затрётся иконка
+  function setBtnText(btn, text) {
+    btn.querySelector(".rhelper-popup-btn-label").textContent = text;
+  }
 
   async function sendToTab(tabId, msg) {
     try {
@@ -245,47 +258,66 @@
     }
   }
 
+  // ===== Page statistics button =====
+
+  document.getElementById("pageStatsBtn").addEventListener("click", async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      showToast("Нет активной вкладки");
+      return;
+    }
+
+    const resp = await sendToTab(tab.id, { action: "showPageStats" });
+    if (!resp || resp.error) {
+      showToast(resp?.error || "Откройте страницу Confluence");
+      return;
+    }
+    window.close();
+  });
+
+  // ===== Prefetch button =====
+
   const prefetchBtn = document.getElementById("prefetchBtn");
-  const prefetchDefaultText = prefetchBtn.textContent;
+  const prefetchDefaultText = prefetchBtn.querySelector(".rhelper-popup-btn-label").textContent;
 
   prefetchBtn.addEventListener("click", async () => {
     prefetchBtn.disabled = true;
-    prefetchBtn.textContent = "Поиск прогонов...";
+    setBtnText(prefetchBtn, "Поиск прогонов...");
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
-      prefetchBtn.textContent = "Нет активной вкладки";
-      setTimeout(() => { prefetchBtn.textContent = prefetchDefaultText; prefetchBtn.disabled = false; }, 2000);
+      setBtnText(prefetchBtn, "Нет активной вкладки");
+      setTimeout(() => { setBtnText(prefetchBtn, prefetchDefaultText); prefetchBtn.disabled = false; }, 2000);
       return;
     }
 
     const resp = await sendToTab(tab.id, { action: "getPageTestRunKeys" });
 
     if (!resp || resp.error) {
-      prefetchBtn.textContent = resp?.error || "Откройте страницу Confluence";
-      setTimeout(() => { prefetchBtn.textContent = prefetchDefaultText; prefetchBtn.disabled = false; }, 2000);
+      setBtnText(prefetchBtn, resp?.error || "Откройте страницу Confluence");
+      setTimeout(() => { setBtnText(prefetchBtn, prefetchDefaultText); prefetchBtn.disabled = false; }, 2000);
       return;
     }
 
     const keys = resp.keys;
     if (!keys || keys.length === 0) {
-      prefetchBtn.textContent = "Прогоны не найдены";
-      setTimeout(() => { prefetchBtn.textContent = prefetchDefaultText; prefetchBtn.disabled = false; }, 2000);
+      setBtnText(prefetchBtn, "Прогоны не найдены");
+      setTimeout(() => { setBtnText(prefetchBtn, prefetchDefaultText); prefetchBtn.disabled = false; }, 2000);
       return;
     }
 
     let done = 0;
     for (const key of keys) {
       done++;
-      prefetchBtn.textContent = `Кэширование... (${done}/${keys.length})`;
+      setBtnText(prefetchBtn, `Кэширование... (${done}/${keys.length})`);
       await sendMessage({ action: "prefetchTestRun", testRunKey: key });
     }
 
-    prefetchBtn.textContent = `Закэшировано! ${keys.length} прогонов`;
+    setBtnText(prefetchBtn, `Закэшировано! ${keys.length} прогонов`);
     await loadStatus();
 
     setTimeout(() => {
-      prefetchBtn.textContent = prefetchDefaultText;
+      setBtnText(prefetchBtn, prefetchDefaultText);
       prefetchBtn.disabled = false;
     }, 2000);
   });
@@ -293,19 +325,40 @@
   // ===== Clear cache button =====
 
   const clearBtn = document.getElementById("clearBtn");
-  clearBtn.addEventListener("click", async () => {
+  const clearConfirm = document.getElementById("clearConfirm");
+
+  // Первый клик только спрашивает — очистка выполняется по кнопке «Да»
+  clearBtn.addEventListener("click", () => {
+    clearConfirm.hidden = !clearConfirm.hidden;
+  });
+
+  document.getElementById("clearConfirmNo").addEventListener("click", () => {
+    clearConfirm.hidden = true;
+  });
+
+  document.getElementById("clearConfirmYes").addEventListener("click", async () => {
+    clearConfirm.hidden = true;
     clearBtn.disabled = true;
-    clearBtn.textContent = "Очистка...";
+    setBtnText(clearBtn, "Очистка...");
 
     await sendMessage({ action: "clearCache" });
 
-    clearBtn.textContent = "Очищено!";
+    setBtnText(clearBtn, "Очищено!");
     await loadStatus();
 
     setTimeout(() => {
-      clearBtn.textContent = "Очистить кэш";
+      setBtnText(clearBtn, "Очистить кэш");
       clearBtn.disabled = false;
     }, 1000);
+  });
+
+  // ===== Список закэшированных прогонов (сворачивается кнопкой) =====
+
+  const runsBtn = document.getElementById("runsBtn");
+  const runsSection = document.getElementById("testRunList");
+
+  runsBtn.addEventListener("click", () => {
+    runsSection.hidden = !runsSection.hidden;
   });
 
   const logBtn = document.getElementById("logBtn");

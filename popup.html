@@ -90,22 +90,51 @@
 
   <div id="emptyMessage" class="rhelper-popup-empty" hidden>Кэш пуст</div>
 
-  <button id="prefetchBtn" class="rhelper-popup-prefetch-btn">Закэшировать прогоны страницы</button>
+  <button id="prefetchBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#8595;</span>
+    <span class="rhelper-popup-btn-label">Закэшировать прогоны страницы</span>
+  </button>
 
-  <button id="clearBtn" class="rhelper-popup-clear-btn">Очистить кэш</button>
+  <button id="runsBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#9635;</span>
+    <span class="rhelper-popup-btn-label">Закэшированные прогоны</span>
+  </button>
 
-  <button id="logBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Логи</button>
+  <div id="testRunList" class="rhelper-popup-list" hidden>
+    <div id="testRunEmpty" class="rhelper-popup-empty" hidden>Кэш пуст</div>
+    <ul id="testRunItems"></ul>
+  </div>
+
+  <button id="clearBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#10005;</span>
+    <span class="rhelper-popup-btn-label">Очистить кэш</span>
+  </button>
+
+  <div id="clearConfirm" class="rhelper-popup-confirm" hidden>
+    <span class="rhelper-popup-confirm-text">Уверены?</span>
+    <button id="clearConfirmYes" class="rhelper-popup-confirm-btn rhelper-popup-confirm-btn-danger">Да</button>
+    <button id="clearConfirmNo" class="rhelper-popup-confirm-btn">Нет</button>
+  </div>
+
+  <button id="pageStatsBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#9636;</span>
+    <span class="rhelper-popup-btn-label">Статистика страницы</span>
+  </button>
+
+  <button id="logBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#8801;</span>
+    <span class="rhelper-popup-btn-label">Логи</span>
+  </button>
 
   <div id="logSection" class="rhelper-popup-log" hidden>
     <div id="logContent" class="rhelper-popup-log-content"></div>
   </div>
 
-  <button id="settingsBtn" class="rhelper-popup-clear-btn" style="margin-top: 6px;">Настройки</button>
+  <button id="settingsBtn" class="rhelper-popup-action-btn">
+    <span class="rhelper-popup-btn-icon" aria-hidden="true">&#9881;&#65038;</span>
+    <span class="rhelper-popup-btn-label">Настройки</span>
+  </button>
 
-  <div id="testRunList" class="rhelper-popup-list" hidden>
-    <div class="rhelper-popup-list-title">Закэшированные прогоны</div>
-    <ul id="testRunItems"></ul>
-  </div>
   </div>
 
   <div id="toast" class="rhelper-popup-toast" hidden></div>

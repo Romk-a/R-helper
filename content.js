@@ -220,8 +220,7 @@
     }).then((resp) => {
       if (requestId !== tooltipRequestId) return;
 
-      const painterClass = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
-      const painter = painterClass ? painterClass.substring("rhelper-painter-".length) : "";
+      const painter = getPainterName(cell);
       const painterName = (painter && !cell.hasAttribute("title") && cell.hasAttribute("data-highlight-colour")) ? painter : null;
 
       const tooltip = R.buildTooltipContent(resp, {
@@ -372,11 +371,11 @@
       tooltip.setAttribute("data-mce-bogus", "all");
 
       // Painter badge
-      const painterClass = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
-      if (painterClass && cell.hasAttribute("data-highlight-colour")) {
+      const painter = getPainterName(cell);
+      if (painter && cell.hasAttribute("data-highlight-colour")) {
         const painterSpan = document.createElement("span");
         painterSpan.className = "rhelper-tooltip-painter";
-        painterSpan.textContent = painterClass.substring("rhelper-painter-".length);
+        painterSpan.textContent = painter;
         const paintTime = getLastPaintTime(cell);
         if (paintTime) painterSpan.title = paintTime;
         tooltip.appendChild(painterSpan);
@@ -417,6 +416,11 @@
   }
 
   // ===== Color Palette =====
+
+  // Цвет «ячейка в разборе»
+  const IN_PROGRESS_COLOR = "#ffe380";
+  const IN_PROGRESS_SLOT = "ffe380"; // как цвет записан в rhh-классах истории
+  const IN_PROGRESS_SELECTOR = `td[data-highlight-colour="${IN_PROGRESS_COLOR}" i]`;
 
   const PALETTE_COLORS = [
     { color: "#ff8f73", title: "Умеренный красный 65 %" },
@@ -471,20 +475,37 @@
     for (const c of all) cell.classList.add(c);
   }
 
-  // Возвращает абсолютное время последней покраски ячейки (из rhh-* классов)
-  // в виде строки для title, либо null если истории нет.
-  function getLastPaintTime(cell) {
+  // Метка времени последней покраски ячейки (из rhh-* классов вида rhh-<ts>-<цвет>-<юзер>),
+  // 0 если истории нет. colorSlot («ffe380») ограничивает поиск покраской в конкретный цвет.
+  function getLastPaintTs(cell, colorSlot) {
     let maxTs = 0;
     for (const cls of cell.classList) {
       if (!cls.startsWith("rhh-")) continue;
-      const ts = Number(cls.split("-")[1]) || 0;
+      const parts = cls.split("-");
+      if (colorSlot && parts[2] !== colorSlot) continue;
+      const ts = Number(parts[1]) || 0;
       if (ts > maxTs) maxTs = ts;
     }
-    if (!maxTs) return null;
-    return "Покрашено: " + new Date(maxTs).toLocaleString("ru-RU", {
+    return maxTs;
+  }
+
+  function formatPaintTs(ts) {
+    return new Date(ts).toLocaleString("ru-RU", {
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit", hour12: false,
     });
+  }
+
+  // Возвращает абсолютное время последней покраски ячейки (из rhh-* классов)
+  // в виде строки для title, либо null если истории нет.
+  function getLastPaintTime(cell) {
+    const ts = getLastPaintTs(cell);
+    return ts ? "Покрашено: " + formatPaintTs(ts) : null;
+  }
+
+  function getPainterName(cell) {
+    const cls = [...cell.classList].find(c => c.startsWith("rhelper-painter-"));
+    return cls ? cls.substring("rhelper-painter-".length) : null;
   }
 
   function removeColorPalette() {
@@ -618,6 +639,16 @@
       } catch (e) { /* cross-origin */ }
     }
     return null;
+  }
+
+  // Вызывает fn для документа каждого доступного (same-origin) iframe страницы
+  function forEachIframeDoc(fn) {
+    for (const iframe of document.querySelectorAll("iframe")) {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc) fn(doc);
+      } catch (e) { /* cross-origin */ }
+    }
   }
 
   function isEditorContext(cell) {
@@ -768,10 +799,365 @@
     return keys;
   }
 
+  // ===== Page statistics =====
+
+  const UNKNOWN_PAINTER = "Неизвестно";
+  const FLASH_DURATION = 1500; // синхронно с анимацией .rhelper-flash в content.css
+  const COMMENT_HEADER_RE = /^коммент/i;
+  const COMMENT_HEADER_ROWS = 2; // шапка таблицы занимает до двух строк
+
+  // Ищет столбец комментариев в шапке: { row, index } или null.
+  function findCommentColumn(table) {
+    const rows = Math.min(COMMENT_HEADER_ROWS, table.rows.length);
+    for (let r = 0; r < rows; r++) {
+      const cells = table.rows[r].children;
+      for (let i = 0; i < cells.length; i++) {
+        if (COMMENT_HEADER_RE.test(cells[i].textContent.trim())) return { row: r, index: i };
+      }
+    }
+    return null;
+  }
+
+  function getRowComment(row, index) {
+    const cell = row.children[index];
+    if (!cell) return "";
+    return cell.textContent.replace(/\s+/g, " ").trim();
+  }
+
+  // Раскладывает ячейки строки заголовка по индексам колонок (с учётом colspan)
+  function mapHeaderRow(row, transform) {
+    const map = [];
+    let idx = 0;
+    for (const cell of row.children) {
+      const value = transform(cell.textContent.trim());
+      const span = cell.colSpan || 1;
+      for (let i = 0; i < span; i++) map[idx + i] = value;
+      idx += span;
+    }
+    return map;
+  }
+
+  // Вторая строка шапки (названия стендов): в колонках прогонов стоит текст, а не номера тестов.
+  function isSubHeaderRow(row, runKeys) {
+    let hasText = false;
+    for (const cell of row.children) {
+      if (!runKeys[getCellColumnIndex(cell)]) continue;
+      const text = cell.textContent.trim();
+      if (!text) continue;
+      if (extractTestCaseNumber(text)) return false;
+      hasText = true;
+    }
+    return hasText;
+  }
+
+  // Проходит по всем таблицам документа и раскладывает ячейки прогонов
+  // (числа в колонках вида C12345) на неразобранные / в разборе / разобранные.
+  function collectPageStats(doc, stats) {
+    for (const table of doc.querySelectorAll("table")) {
+      const headerRow = table.rows[0];
+      if (!headerRow) continue;
+
+      // Индекс колонки → ключ прогона (с учётом colspan в заголовке)
+      const runKeys = mapHeaderRow(headerRow, extractTestRunKey);
+      if (!runKeys.some(Boolean)) continue;
+
+      // Индекс колонки → название стенда из второй строки шапки («Смоленск», «Воронеж», …)
+      const subHeader = table.rows[1] && isSubHeaderRow(table.rows[1], runKeys) ? table.rows[1] : null;
+      const colLabels = subHeader ? mapHeaderRow(subHeader, (text) => text) : [];
+
+      const commentCol = findCommentColumn(table);
+      const firstDataRow = subHeader ? 2 : 1;
+
+      for (let r = firstDataRow; r < table.rows.length; r++) {
+        for (const cell of table.rows[r].children) {
+          const colIdx = getCellColumnIndex(cell);
+          const testRunKey = runKeys[colIdx];
+          if (!testRunKey) continue;
+          const num = extractTestCaseNumber(cell.textContent);
+          if (!num) continue;
+
+          stats.runKeys.add(testRunKey);
+          stats.total++;
+
+          const colour = (cell.getAttribute("data-highlight-colour") || "").toLowerCase();
+          if (!colour) {
+            stats.unpainted++;
+          } else if (colour === IN_PROGRESS_COLOR) {
+            stats.inProgress.push({
+              cell,
+              number: num,
+              testRunKey,
+              painter: getPainterName(cell),
+              // время именно последней покраски в жёлтый — от него считается «сколько в разборе»
+              ts: getLastPaintTs(cell, IN_PROGRESS_SLOT),
+              columnLabel: colLabels[colIdx] || "",
+              comment: commentCol ? getRowComment(table.rows[r], commentCol.index) : "",
+            });
+          } else {
+            stats.done++;
+          }
+        }
+      }
+    }
+    return stats;
+  }
+
+  function collectPageStatsAll() {
+    const stats = { total: 0, unpainted: 0, done: 0, inProgress: [], runKeys: new Set() };
+    collectPageStats(document, stats);
+    forEachIframeDoc((doc) => collectPageStats(doc, stats));
+    return stats;
+  }
+
+  function scrollToCellElement(cell) {
+    const ownerDoc = cell.ownerDocument;
+    if (ownerDoc !== document) {
+      const iframe = findIframeFor(ownerDoc);
+      if (iframe) iframe.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    cell.scrollIntoView({ behavior: "smooth", block: "center" });
+    cell.classList.add("rhelper-flash");
+    setTimeout(() => cell.classList.remove("rhelper-flash"), FLASH_DURATION);
+  }
+
+  function pluralRu(n, one, few, many) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+    return many;
+  }
+
+  // Сколько прошло времени: «3 дня 8 часов», «5 часов 12 минут», «7 минут»
+  function formatElapsed(ms) {
+    const totalMin = Math.max(0, Math.floor(ms / 60000));
+    if (totalMin === 0) return "меньше минуты";
+
+    const days = Math.floor(totalMin / 1440);
+    const hours = Math.floor((totalMin % 1440) / 60);
+    const mins = totalMin % 60;
+
+    const parts = [];
+    if (days > 0) {
+      parts.push(days + " " + pluralRu(days, "день", "дня", "дней"));
+      if (hours > 0) parts.push(hours + " " + pluralRu(hours, "час", "часа", "часов"));
+    } else if (hours > 0) {
+      parts.push(hours + " " + pluralRu(hours, "час", "часа", "часов"));
+      if (mins > 0) parts.push(mins + " " + pluralRu(mins, "минута", "минуты", "минут"));
+    } else {
+      parts.push(mins + " " + pluralRu(mins, "минута", "минуты", "минут"));
+    }
+    return parts.join(" ");
+  }
+
+  const COMMENT_HINT_LIMIT = 300;
+
+  function truncate(text, limit) {
+    return text.length > limit ? text.slice(0, limit).trimEnd() + "…" : text;
+  }
+
+  // Помечает строку, по которой кликнули. Снимаем метку по всему попапу, а не только
+  // внутри своей группы художника — иначе в каждой группе останется по подсвеченной строке.
+  function markActiveRow(row) {
+    const scope = row.closest(".rhelper-popup-body") || row.parentElement;
+    for (const el of scope.querySelectorAll(".rhelper-stats-row-active")) {
+      el.classList.remove("rhelper-stats-row-active");
+    }
+    row.classList.add("rhelper-stats-row-active");
+  }
+
+  // На время вспышки делает попап полупрозрачным, чтобы под ним была видна ячейка
+  let peekTimeout = null;
+  function peekAtPage() {
+    if (!currentPopup) return;
+    currentPopup.classList.add("rhelper-overlay-peek");
+    clearTimeout(peekTimeout);
+    peekTimeout = setTimeout(() => {
+      if (currentPopup) currentPopup.classList.remove("rhelper-overlay-peek");
+      peekTimeout = null;
+    }, FLASH_DURATION);
+  }
+
+  function buildStatTile(value, label, modifier, hint) {
+    const tile = document.createElement("div");
+    tile.className = "rhelper-stat-tile" + (modifier ? " " + modifier : "");
+    if (hint) tile.title = hint;
+    const valueEl = document.createElement("div");
+    valueEl.className = "rhelper-stat-tile-value";
+    valueEl.textContent = value;
+    const labelEl = document.createElement("div");
+    labelEl.className = "rhelper-stat-tile-label";
+    labelEl.textContent = label;
+    tile.appendChild(valueEl);
+    tile.appendChild(labelEl);
+    return tile;
+  }
+
+  function renderPageStats(body, stats) {
+    body.textContent = "";
+
+    if (stats.total === 0) {
+      const empty = document.createElement("div");
+      empty.className = "rhelper-popup-empty";
+      empty.textContent = "На странице не найдено таблиц с колонками прогонов (C…).";
+      body.appendChild(empty);
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "rhelper-stats-grid";
+    grid.appendChild(buildStatTile(stats.total, "Всего ячеек", "", "Все ячейки с номерами тест-кейсов в колонках прогонов"));
+    grid.appendChild(buildStatTile(stats.unpainted, "Не разобрано", "rhelper-stat-tile-plain", "Ячейки без заливки"));
+    grid.appendChild(buildStatTile(stats.inProgress.length, "В разборе", "rhelper-stat-tile-progress", "Ячейки, закрашенные жёлтым"));
+    grid.appendChild(buildStatTile(stats.done, "Разобрано", "rhelper-stat-tile-done", "Ячейки, закрашенные любым цветом, кроме жёлтого"));
+    body.appendChild(grid);
+
+    const section = document.createElement("div");
+    section.className = "rhelper-popup-section";
+    const title = document.createElement("div");
+    title.className = "rhelper-popup-section-title";
+    title.textContent = "В разборе — " + stats.inProgress.length;
+    section.appendChild(title);
+
+    if (stats.inProgress.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "rhelper-popup-empty";
+      empty.textContent = "Нет ячеек в разборе.";
+      section.appendChild(empty);
+      body.appendChild(section);
+      return;
+    }
+
+    // Группировка по художнику: сначала те, у кого ячеек больше
+    const groups = new Map();
+    for (const item of stats.inProgress) {
+      const painter = item.painter || UNKNOWN_PAINTER;
+      if (!groups.has(painter)) groups.set(painter, []);
+      groups.get(painter).push(item);
+    }
+    const sortedGroups = [...groups.entries()]
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "ru"));
+
+    for (const [painter, items] of sortedGroups) {
+      items.sort((a, b) => Number(a.number) - Number(b.number));
+
+      const group = document.createElement("div");
+      group.className = "rhelper-stats-group";
+
+      const head = document.createElement("div");
+      head.className = "rhelper-stats-group-head";
+      const nameEl = document.createElement("span");
+      nameEl.className = "rhelper-stats-painter";
+      nameEl.textContent = painter;
+      if (painter === UNKNOWN_PAINTER) nameEl.title = "Ячейка закрашена не через R-Helper";
+      const countEl = document.createElement("span");
+      countEl.className = "rhelper-stats-painter-count";
+      countEl.textContent = items.length;
+      head.appendChild(nameEl);
+      head.appendChild(countEl);
+      group.appendChild(head);
+
+      const list = document.createElement("div");
+      list.className = "rhelper-stats-cells";
+      const now = Date.now();
+      for (const item of items) {
+        const row = document.createElement("div");
+        row.className = "rhelper-stats-row";
+
+        const chip = document.createElement("a");
+        chip.className = "rhelper-stats-cell";
+        chip.href = "#";
+        chip.textContent = item.number;
+        chip.title = (item.columnLabel ? item.columnLabel + " · " : "")
+          + item.testRunKey + " — показать ячейку на странице";
+        chip.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          markActiveRow(row);
+          peekAtPage();
+          scrollToCellElement(item.cell);
+        });
+        row.appendChild(chip);
+
+        if (item.columnLabel) {
+          const columnEl = document.createElement("span");
+          columnEl.className = "rhelper-stats-row-column";
+          columnEl.textContent = item.columnLabel.charAt(0).toUpperCase();
+          columnEl.title = item.columnLabel;
+          row.appendChild(columnEl);
+        }
+
+        const commentEl = document.createElement("span");
+        commentEl.className = "rhelper-stats-row-comment";
+        if (item.comment) {
+          commentEl.textContent = item.comment;
+          commentEl.title = truncate(item.comment, COMMENT_HINT_LIMIT);
+        } else {
+          commentEl.textContent = "без комментария";
+          commentEl.classList.add("rhelper-stats-row-comment-empty");
+        }
+        row.appendChild(commentEl);
+
+        if (item.ts) {
+          const timeEl = document.createElement("span");
+          timeEl.className = "rhelper-stats-row-time";
+          timeEl.textContent = formatPaintTs(item.ts);
+          row.appendChild(timeEl);
+
+          const elapsedEl = document.createElement("span");
+          elapsedEl.className = "rhelper-stats-row-elapsed";
+          elapsedEl.textContent = formatElapsed(now - item.ts) + " в разборе";
+          row.appendChild(elapsedEl);
+        } else {
+          const unknownEl = document.createElement("span");
+          unknownEl.className = "rhelper-stats-row-time rhelper-stats-row-time-unknown";
+          unknownEl.textContent = "время покраски неизвестно";
+          unknownEl.title = "Ячейка покрашена не через R-Helper или до появления истории покраски";
+          row.appendChild(unknownEl);
+        }
+
+        list.appendChild(row);
+      }
+      group.appendChild(list);
+      section.appendChild(group);
+    }
+
+    body.appendChild(section);
+  }
+
+  function showPageStatsPopup() {
+    removePopup();
+    removeTooltip();
+    removeColorPalette();
+    clearCellHighlight();
+
+    const stats = collectPageStatsAll();
+
+    const titleBlock = document.createElement("div");
+    titleBlock.className = "rhelper-popup-title-block";
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "rhelper-popup-title";
+    titleSpan.textContent = "Статистика страницы";
+    titleBlock.appendChild(titleSpan);
+    const subtitle = document.createElement("div");
+    subtitle.className = "rhelper-popup-subtitle";
+    if (stats.runKeys.size > 0) {
+      subtitle.textContent = "Прогонов на странице: " + stats.runKeys.size;
+    }
+    titleBlock.appendChild(subtitle);
+
+    const { overlay, body, setRemovePopup } = R.createPopupShell(titleBlock);
+    document.body.appendChild(overlay);
+    currentPopup = overlay;
+    setRemovePopup(removePopup);
+
+    renderPageStats(body, stats);
+  }
+
   // ===== Message listener for popup =====
 
   function collectInProgressCells(doc, username, results) {
-    const cells = doc.querySelectorAll('td[data-highlight-colour="#ffe380"]');
+    const cells = doc.querySelectorAll(IN_PROGRESS_SELECTOR);
     cells.forEach((cell) => {
       if (!cell.classList.contains("rhelper-painter-" + username)) return;
       const text = cell.textContent.trim();
@@ -787,13 +1173,13 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "getPageTestRunKeys") {
       const keys = collectTestRunKeys(document);
-      document.querySelectorAll("iframe").forEach((iframe) => {
-        try {
-          const doc = iframe.contentDocument || iframe.contentWindow?.document;
-          if (doc) collectTestRunKeys(doc, keys);
-        } catch (e) { /* cross-origin */ }
-      });
+      forEachIframeDoc((doc) => collectTestRunKeys(doc, keys));
       sendResponse({ keys: Array.from(keys) });
+    }
+
+    if (message.action === "showPageStats") {
+      showPageStatsPopup();
+      sendResponse({ ok: true });
     }
 
     if (message.action === "scrollToCell") {
@@ -802,27 +1188,16 @@
 
       function findCell(doc) {
         if (target) return;
-        const cells = doc.querySelectorAll('td[data-highlight-colour="#ffe380"]');
+        const cells = doc.querySelectorAll(IN_PROGRESS_SELECTOR);
         for (const cell of cells) {
           if (cell.textContent.trim() === num) { target = cell; return; }
         }
       }
 
       findCell(document);
-      if (!target) {
-        document.querySelectorAll("iframe").forEach((iframe) => {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (doc) findCell(doc);
-          } catch (e) { /* cross-origin */ }
-        });
-      }
+      if (!target) forEachIframeDoc(findCell);
 
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-        target.classList.add("rhelper-flash");
-        setTimeout(() => target.classList.remove("rhelper-flash"), 1500);
-      }
+      if (target) scrollToCellElement(target);
       sendResponse({ found: !!target });
     }
 
@@ -835,12 +1210,7 @@
         }
         const cells = [];
         collectInProgressCells(document, username, cells);
-        document.querySelectorAll("iframe").forEach((iframe) => {
-          try {
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (doc) collectInProgressCells(doc, username, cells);
-          } catch (e) { /* cross-origin */ }
-        });
+        forEachIframeDoc((doc) => collectInProgressCells(doc, username, cells));
         sendResponse({ username, cells });
       })();
       return true;

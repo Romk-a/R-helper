@@ -181,6 +181,24 @@ body {
   margin: 1px 0;
 }
 
+/* Группа пунктов: заголовок без маркера, подпункты — вложенным списком */
+.rhelper-popup-whatsnew-items > li.rhelper-popup-whatsnew-group {
+  list-style: none;
+  margin: 5px 0 2px -18px;
+  font-weight: 600;
+}
+
+.rhelper-popup-whatsnew-items > li.rhelper-popup-whatsnew-group:first-child {
+  margin-top: 0;
+}
+
+.rhelper-popup-whatsnew-subitems {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  font-weight: 400;
+}
+
 /* In-progress section */
 .rhelper-popup-inprogress {
   margin-bottom: 12px;
@@ -264,9 +282,63 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== Подтверждение под кнопкой «Очистить кэш» ===== */
+.rhelper-popup-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  border: 1px solid #ffbdad;
+  border-radius: 4px;
+  background: #fff8f7;
+}
+
+.rhelper-popup-confirm[hidden] {
+  display: none;
+}
+
+.rhelper-popup-confirm-text {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: #bf2600;
+}
+
+.rhelper-popup-confirm-btn {
+  flex: none;
+  min-width: 52px;
+  padding: 4px 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  background: #fff;
+  color: #172b4d;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.rhelper-popup-confirm-btn:hover {
+  background: #f4f5f7;
+}
+
+.rhelper-popup-confirm-btn-danger {
+  border-color: #de350b;
+  background: #de350b;
+  color: #fff;
+}
+
+.rhelper-popup-confirm-btn-danger:hover {
+  background: #bf2600;
+  border-color: #bf2600;
+}
+
+/* Раскрывается кнопкой «Закэшированные прогоны» — оформлен как панель логов */
 .rhelper-popup-list {
-  margin-top: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
 }
 
 .rhelper-popup-list-title {
@@ -282,8 +354,14 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid #e5e5e5;
-  border-radius: 4px;
+}
+
+.rhelper-popup-list ul:empty {
+  display: none;
+}
+
+.rhelper-popup-list .rhelper-popup-empty {
+  padding: 6px 0;
 }
 
 .rhelper-popup-list li {
@@ -369,6 +447,67 @@ body {
 .rhelper-popup-prefetch-btn:disabled {
   cursor: default;
   opacity: 0.7;
+}
+
+/* ===== Ряд одинаковых кнопок-действий ===== */
+.rhelper-popup-action-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 6px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #172b4d;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.rhelper-popup-action-btn:hover {
+  background: #f4f7ff;
+  border-color: #0052cc;
+  color: #0052cc;
+}
+
+.rhelper-popup-action-btn:active {
+  background: #e9f0ff;
+}
+
+.rhelper-popup-action-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+  background: #fafafa;
+  border-color: #e5e5e5;
+  color: #172b4d;
+}
+
+/* Иконка выведена из потока, чтобы не смещать подпись — та центрируется по всей кнопке */
+.rhelper-popup-btn-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.65;
+}
+
+.rhelper-popup-action-btn:hover .rhelper-popup-btn-icon {
+  opacity: 1;
+}
+
+.rhelper-popup-btn-label {
+  min-width: 0;
+  padding: 0 18px; /* запас, чтобы длинная подпись не наехала на иконку */
+  text-align: center;
 }
 
 .rhelper-popup-clear-btn {
@@ -705,6 +844,13 @@ body {
   :root:not([data-theme="light"]) .rhelper-popup-version { color: #999; }
   :root:not([data-theme="light"]) .rhelper-popup-stat-row { background: #2a2a2a; }
   :root:not([data-theme="light"]) .rhelper-popup-stat-label { color: #999; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm { background: #3a1f1a; border-color: #8b3a2a; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm-text { color: #ff8a80; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm-btn { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm-btn:hover { background: #333; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm-btn-danger { background: #c9391b; border-color: #c9391b; color: #fff; }
+  :root:not([data-theme="light"]) .rhelper-popup-confirm-btn-danger:hover { background: #a82e15; border-color: #a82e15; }
+  :root:not([data-theme="light"]) .rhelper-popup-list { border-color: #333; }
   :root:not([data-theme="light"]) .rhelper-popup-list-title { color: #999; }
   :root:not([data-theme="light"]) .rhelper-popup-list ul { border-color: #333; }
   :root:not([data-theme="light"]) .rhelper-popup-list li { border-bottom-color: #333; }
@@ -719,6 +865,10 @@ body {
   :root:not([data-theme="light"]) .rhelper-popup-clear-btn { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
   :root:not([data-theme="light"]) .rhelper-popup-clear-btn:hover { background: #333; }
   :root:not([data-theme="light"]) .rhelper-popup-clear-btn:active { background: #444; }
+  :root:not([data-theme="light"]) .rhelper-popup-action-btn { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
+  :root:not([data-theme="light"]) .rhelper-popup-action-btn:hover { background: #1c2d41; border-color: #79b8ff; color: #79b8ff; }
+  :root:not([data-theme="light"]) .rhelper-popup-action-btn:active { background: #16283c; }
+  :root:not([data-theme="light"]) .rhelper-popup-action-btn:disabled { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
   :root:not([data-theme="light"]) .rhelper-popup-log { border-color: #333; }
   :root:not([data-theme="light"]) .rhelper-popup-log-content { color: #ccc; }
   :root:not([data-theme="light"]) .rhelper-popup-log-entry { border-bottom-color: #2a2a2a; }
@@ -773,6 +923,13 @@ body {
 :root[data-theme="dark"] .rhelper-popup-version { color: #999; }
 :root[data-theme="dark"] .rhelper-popup-stat-row { background: #2a2a2a; }
 :root[data-theme="dark"] .rhelper-popup-stat-label { color: #999; }
+:root[data-theme="dark"] .rhelper-popup-confirm { background: #3a1f1a; border-color: #8b3a2a; }
+:root[data-theme="dark"] .rhelper-popup-confirm-text { color: #ff8a80; }
+:root[data-theme="dark"] .rhelper-popup-confirm-btn { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+:root[data-theme="dark"] .rhelper-popup-confirm-btn:hover { background: #333; }
+:root[data-theme="dark"] .rhelper-popup-confirm-btn-danger { background: #c9391b; border-color: #c9391b; color: #fff; }
+:root[data-theme="dark"] .rhelper-popup-confirm-btn-danger:hover { background: #a82e15; border-color: #a82e15; }
+:root[data-theme="dark"] .rhelper-popup-list { border-color: #333; }
 :root[data-theme="dark"] .rhelper-popup-list-title { color: #999; }
 :root[data-theme="dark"] .rhelper-popup-list ul { border-color: #333; }
 :root[data-theme="dark"] .rhelper-popup-list li { border-bottom-color: #333; }
@@ -787,6 +944,10 @@ body {
 :root[data-theme="dark"] .rhelper-popup-clear-btn { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
 :root[data-theme="dark"] .rhelper-popup-clear-btn:hover { background: #333; }
 :root[data-theme="dark"] .rhelper-popup-clear-btn:active { background: #444; }
+:root[data-theme="dark"] .rhelper-popup-action-btn { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
+:root[data-theme="dark"] .rhelper-popup-action-btn:hover { background: #1c2d41; border-color: #79b8ff; color: #79b8ff; }
+:root[data-theme="dark"] .rhelper-popup-action-btn:active { background: #16283c; }
+:root[data-theme="dark"] .rhelper-popup-action-btn:disabled { background: #2a2a2a; border-color: #333; color: #e0e0e0; }
 :root[data-theme="dark"] .rhelper-popup-log { border-color: #333; }
 :root[data-theme="dark"] .rhelper-popup-log-content { color: #ccc; }
 :root[data-theme="dark"] .rhelper-popup-log-entry { border-bottom-color: #2a2a2a; }

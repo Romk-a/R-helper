@@ -579,6 +579,169 @@
   transform: rotate(-45deg);
 }
 
+/* ===== Page statistics ===== */
+.rhelper-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.rhelper-stat-tile {
+  padding: 10px 12px;
+  border: 1px solid #e5e5e5;
+  border-left: 3px solid #dfe1e6;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.rhelper-stat-tile-plain { border-left-color: #6b778c; }
+.rhelper-stat-tile-progress { border-left-color: #ffe380; }
+.rhelper-stat-tile-done { border-left-color: #79f2c0; }
+
+.rhelper-stat-tile-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #172b4d;
+  line-height: 1.2;
+}
+
+.rhelper-stat-tile-label {
+  font-size: 11px;
+  color: #6b778c;
+  margin-top: 2px;
+}
+
+.rhelper-stats-group {
+  margin-bottom: 12px;
+}
+
+.rhelper-stats-group:last-child {
+  margin-bottom: 0;
+}
+
+.rhelper-stats-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rhelper-stats-painter {
+  font-size: 13px;
+  font-weight: 600;
+  color: #172b4d;
+}
+
+.rhelper-stats-painter-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b778c;
+  background: #f0f1f4;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.rhelper-stats-cells {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rhelper-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+}
+
+.rhelper-stats-row-active {
+  background: #f4f5f7;
+}
+
+/* Пока играет вспышка на ячейке, попап приглушается — чтобы страница была видна */
+.rhelper-overlay-peek {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.rhelper-overlay-peek .rhelper-popup {
+  opacity: 0.2;
+}
+
+.rhelper-overlay,
+.rhelper-popup {
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.rhelper-stats-cell {
+  flex: none;
+  min-width: 62px;
+  text-align: center;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  color: #172b4d;
+  background: #fff8dc;
+  border: 1px solid #ffe380;
+  border-radius: 4px;
+  padding: 2px 7px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rhelper-stats-cell:hover {
+  background: #ffe380;
+  text-decoration: none;
+}
+
+.rhelper-stats-row-column {
+  flex: none;
+  min-width: 18px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #42526e;
+  background: #f0f1f4;
+  border-radius: 3px;
+  padding: 1px 4px;
+  cursor: default;
+}
+
+.rhelper-stats-row-comment {
+  flex: 1 1 120px;
+  min-width: 0;
+  color: #172b4d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rhelper-stats-row-comment-empty {
+  color: #6b778c;
+  font-style: italic;
+}
+
+.rhelper-stats-row-time {
+  flex: none;
+  color: #6b778c;
+  white-space: nowrap;
+}
+
+.rhelper-stats-row-time-unknown {
+  font-style: italic;
+}
+
+.rhelper-stats-row-elapsed {
+  margin-left: auto;
+  font-weight: 600;
+  color: #974f0c;
+  white-space: nowrap;
+}
+
 /* ===== Dark theme adaptation ===== */
 @media (prefers-color-scheme: dark) {
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup { background: #1e1e1e; color: #e0e0e0; }
@@ -597,6 +760,23 @@
   .rhelper-overlay:not([data-theme="light"]) .rhelper-attachment-item { background: #2a2a2a; border-color: #444; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-attachment-name { color: #e0e0e0; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-tooltip-vm { color: #79b8ff; background: #1c2d41; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile { background: #2a2a2a; border-color: #444; border-left-color: #555; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile-plain { border-left-color: #8993a4; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile-progress { border-left-color: #ffe380; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile-done { border-left-color: #79f2c0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile-value { color: #e0e0e0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stat-tile-label { color: #999; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-painter { color: #e0e0e0; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-painter-count { color: #bbb; background: #3a3a3a; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell { color: #ffe082; background: #3e2723; border-color: #ffe380; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell:hover { background: #5d4037; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-active { background: #2f2f2f; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-column { color: #d0d0d0; background: #3a3a3a; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-comment { color: #ccc; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-comment-empty { color: #888; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-time { color: #999; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-elapsed { color: #ffab70; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-empty { color: #888; }
   .rhelper-color-palette:not([data-theme="light"]) { background: #2a2a2a; border-color: #444; }
   .rhelper-color-palette:not([data-theme="light"]) .rhelper-color-remove { background: #2a2a2a; }
 }
@@ -618,6 +798,23 @@
 .rhelper-overlay[data-theme="dark"] .rhelper-attachment-item { background: #2a2a2a; border-color: #444; }
 .rhelper-overlay[data-theme="dark"] .rhelper-attachment-name { color: #e0e0e0; }
 .rhelper-overlay[data-theme="dark"] .rhelper-tooltip-vm { color: #79b8ff; background: #1c2d41; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile { background: #2a2a2a; border-color: #444; border-left-color: #555; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile-plain { border-left-color: #8993a4; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile-progress { border-left-color: #ffe380; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile-done { border-left-color: #79f2c0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile-value { color: #e0e0e0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stat-tile-label { color: #999; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-painter { color: #e0e0e0; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-painter-count { color: #bbb; background: #3a3a3a; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-cell { color: #ffe082; background: #3e2723; border-color: #ffe380; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-cell:hover { background: #5d4037; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-active { background: #2f2f2f; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-column { color: #d0d0d0; background: #3a3a3a; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-comment { color: #ccc; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-comment-empty { color: #888; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-time { color: #999; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-row-elapsed { color: #ffab70; }
+.rhelper-overlay[data-theme="dark"] .rhelper-popup-empty { color: #888; }
 .rhelper-color-palette[data-theme="dark"] { background: #2a2a2a; border-color: #444; }
 .rhelper-color-palette[data-theme="dark"] .rhelper-color-remove { background: #2a2a2a; }
 
