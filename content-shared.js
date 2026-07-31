@@ -43,6 +43,8 @@
     const patterns = [
       /Restoring snapshot .+? for virtual machine (\S+)/gi,
       /the virtual machine (\S+) was declared here/gi,
+      /Creating virtual machine (\S+)/gi,
+      /TESTO_ACTION_WAIT_INTERVAL\b.*?\bin virtual machine (\S+)/gi,
     ];
     for (const re of patterns) {
       let m;
