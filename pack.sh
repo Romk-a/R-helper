@@ -43,7 +43,11 @@ pack.sh — сборка пакетов расширения R-Helper
 
 Требования: Node.js + npm (для npx crx), zip
 
-После сборки протестируй пакеты, затем запусти ./publish.sh для публикации.
+После сборки:
+  ./test-firefox.sh   запустить Firefox с собранным расширением (web-ext run)
+  ./publish.sh        опубликовать (Chrome Web Store и AMO)
+
+В Chrome пакет проверяется вручную: chrome://extensions → «Загрузить распакованное».
 EOF
 }
 
@@ -128,9 +132,11 @@ FIREFOX_OUTPUT="${EXTENSION_NAME}-${VERSION}-firefox.zip"
 rm -f "$FIREFOX_OUTPUT"
 
 (cd "$FIREFOX_DIR" && zip -r "$SCRIPT_DIR/$FIREFOX_OUTPUT" .)
+echo "Создан: $FIREFOX_OUTPUT"
 
 echo ""
 echo "Сборка завершена:"
 ls -lh "$SCRIPT_DIR/$CHROME_OUTPUT" "$SCRIPT_DIR/$CHROME_ZIP" "$SCRIPT_DIR/$FIREFOX_OUTPUT"
 echo ""
-echo "Протестируй пакеты, затем запусти ./publish.sh для публикации."
+echo "Проверка в Firefox: ./test-firefox.sh"
+echo "Публикация:         ./publish.sh"

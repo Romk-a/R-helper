@@ -934,6 +934,13 @@
     return stats;
   }
 
+  // Единый порядок ячеек «в разборе» для статистики и панели: сначала те, что взяты
+  // в разбор раньше. Время покраски неизвестно (красили не через R-Helper) — в конец,
+  // при равном времени порядок задаёт номер, иначе он скакал бы между пересчётами.
+  function compareByPaintTime(a, b) {
+    return (a.ts || Infinity) - (b.ts || Infinity) || Number(a.number) - Number(b.number);
+  }
+
   function scrollToCellElement(cell) {
     const ownerDoc = cell.ownerDocument;
     if (ownerDoc !== document) {
@@ -1064,7 +1071,7 @@
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "ru"));
 
     for (const [painter, items] of sortedGroups) {
-      items.sort((a, b) => Number(a.number) - Number(b.number));
+      items.sort(compareByPaintTime);
 
       const group = document.createElement("div");
       group.className = "rhelper-stats-group";
@@ -1203,12 +1210,13 @@
     }
   }
 
-  // Мои жёлтые ячейки; самые залежавшиеся сверху, с неизвестным временем покраски — в конец
+  // Мои жёлтые ячейки в том же порядке, что и в «Статистике страницы»:
+  // взятые в разбор раньше — первыми
   function collectMyInProgress() {
     if (!currentUserName) return [];
     return collectPageStatsAll().inProgress
       .filter((item) => item.painter === currentUserName)
-      .sort((a, b) => (a.ts || Infinity) - (b.ts || Infinity));
+      .sort(compareByPaintTime);
   }
 
   function removeDock() {
