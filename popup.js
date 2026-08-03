@@ -1,6 +1,10 @@
 (function () {
   "use strict";
 
+  // Тот же ключ, что DOCK_STATE_KEY в content.js: попап пишет в него видимость
+  // плавающей панели и сброс её положения, контент-скрипт слушает изменения
+  const DOCK_STATE_KEY = "dockState";
+
   async function sendMessage(msg) {
     try {
       return await chrome.runtime.sendMessage(msg);
@@ -245,6 +249,19 @@
     });
   }
 
+  // Плавающая панель «Мои в разборе» на странице. Контент-скрипт слушает
+  // изменения dockState в storage, поэтому здесь достаточно записи.
+  async function initDockToggle() {
+    const toggle = document.getElementById("dockToggle");
+    const saved = (await chrome.storage.local.get(DOCK_STATE_KEY))[DOCK_STATE_KEY];
+    toggle.checked = !(saved && saved.hidden);
+    toggle.addEventListener("change", async () => {
+      const cur = (await chrome.storage.local.get(DOCK_STATE_KEY))[DOCK_STATE_KEY] || {};
+      cur.hidden = !toggle.checked;
+      await chrome.storage.local.set({ [DOCK_STATE_KEY]: cur });
+    });
+  }
+
   // Текст кнопки лежит в отдельном span — меняем его, иначе затрётся иконка
   function setBtnText(btn, text) {
     btn.querySelector(".rhelper-popup-btn-label").textContent = text;
@@ -254,7 +271,7 @@
     try {
       return await chrome.tabs.sendMessage(tabId, msg);
     } catch (e) {
-      return { error: "Контент-скрипт недоступен. Откройте страницу Confluence." };
+      return { error: "Контент-скрипт недоступен. Откройте страницу с разбором." };
     }
   }
 
@@ -269,7 +286,7 @@
 
     const resp = await sendToTab(tab.id, { action: "showPageStats" });
     if (!resp || resp.error) {
-      showToast(resp?.error || "Откройте страницу Confluence");
+      showToast(resp?.error || "Откройте страницу с разбором");
       return;
     }
     window.close();
@@ -294,7 +311,7 @@
     const resp = await sendToTab(tab.id, { action: "getPageTestRunKeys" });
 
     if (!resp || resp.error) {
-      setBtnText(prefetchBtn, resp?.error || "Откройте страницу Confluence");
+      setBtnText(prefetchBtn, resp?.error || "Откройте страницу с разбором");
       setTimeout(() => { setBtnText(prefetchBtn, prefetchDefaultText); prefetchBtn.disabled = false; }, 2000);
       return;
     }
@@ -516,6 +533,15 @@
     showToast("Отметка «Что нового» сброшена. Откройте попап заново.");
   });
 
+  // Сбрасывает только координаты — видимость и свёрнутость панели остаются как были
+  document.getElementById("debugResetDockPos").addEventListener("click", async () => {
+    const cur = (await chrome.storage.local.get(DOCK_STATE_KEY))[DOCK_STATE_KEY] || {};
+    cur.top = null;
+    cur.left = null;
+    await chrome.storage.local.set({ [DOCK_STATE_KEY]: cur });
+    showToast("Панель вернулась в правый верхний угол");
+  });
+
   document.getElementById("debugSetLastSeen").addEventListener("click", async () => {
     const input = document.getElementById("debugLastSeenInput");
     const value = input.value.trim();
@@ -542,5 +568,6 @@
 
   loadStatus();
   loadInProgress();
+  initDockToggle();
   showWhatsNew();
 })();

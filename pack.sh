@@ -19,6 +19,49 @@
 #
 set -e
 
+usage() {
+    cat <<'EOF'
+pack.sh — сборка пакетов расширения R-Helper
+
+Использование:
+  ./pack.sh              собрать пакеты для Chrome и Firefox
+  ./pack.sh -h | --help  показать эту справку
+
+Аргументов, кроме справки, скрипт не принимает: версия берётся из manifest.json,
+и она должна совпадать с manifest.firefox.json — иначе сборка прервётся.
+
+Что делает:
+  1. Сверяет версии в manifest.json и manifest.firefox.json
+  2. Собирает Chrome-пакет .crx через npx crx (подпись — key.pem, создаётся при первом запуске)
+  3. Собирает Chrome-пакет .zip для Chrome Web Store
+  4. Собирает Firefox-пакет .zip
+
+Результат (в каталоге скрипта):
+  r-helper-{version}.crx
+  r-helper-{version}-chrome.zip
+  r-helper-{version}-firefox.zip
+
+Требования: Node.js + npm (для npx crx), zip
+
+После сборки протестируй пакеты, затем запусти ./publish.sh для публикации.
+EOF
+}
+
+case "${1:-}" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    "")
+        ;;
+    *)
+        echo "ОШИБКА: неизвестный аргумент «$1»" >&2
+        echo "" >&2
+        usage >&2
+        exit 1
+        ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 

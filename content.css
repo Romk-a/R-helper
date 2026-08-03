@@ -742,6 +742,130 @@
   white-space: nowrap;
 }
 
+/* ===== Плавающая панель «Мои в разборе» ===== */
+
+.rhelper-dock {
+  position: fixed;
+  z-index: 999997; /* под тултипом и попапом — панель не должна их перекрывать */
+  width: max-content;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  background: #fff;
+  border: 1px solid #dfe1e6;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(9, 30, 66, 0.25);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  color: #172b4d;
+  overflow: hidden;
+}
+
+.rhelper-dock-dragging {
+  user-select: none;
+  box-shadow: 0 8px 24px rgba(9, 30, 66, 0.35);
+}
+
+.rhelper-dock-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  background: #f4f5f7;
+  border-bottom: 1px solid #dfe1e6;
+  cursor: move;
+  touch-action: none; /* иначе жест перетаскивания уйдёт в прокрутку страницы */
+}
+
+.rhelper-dock-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffe380;
+  border: 1px solid #d9b400;
+}
+
+.rhelper-dock-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rhelper-dock-count {
+  margin-right: auto;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #dfe1e6;
+  color: #42526e;
+  font-weight: 600;
+}
+
+.rhelper-dock-btn {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #6b778c;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rhelper-dock-btn:hover {
+  background: #dfe1e6;
+  color: #172b4d;
+}
+
+.rhelper-dock-close {
+  font-size: 16px;
+}
+
+/* Сетка, а не flex-wrap: у флекса ширина считается по строке без переноса, поэтому
+   с пятым номером панель скачком расширялась до max-width ради полупустой строки.
+   Колонки задаёт renderDockList() — их не больше, чем номеров, иначе пустые треки
+   держали бы ширину панели при одной-двух ячейках. */
+.rhelper-dock-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.rhelper-dock-num {
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-weight: 600;
+  text-align: center;
+  color: #0052cc;
+  background: #f4f5f7;
+  border: 1px solid #dfe1e6;
+  border-radius: 3px;
+  padding: 2px 6px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rhelper-dock-num:hover {
+  background: #e6f0ff;
+  border-color: #0052cc;
+}
+
+.rhelper-dock-is-collapsed .rhelper-dock-list {
+  display: none;
+}
+
+.rhelper-dock-is-collapsed .rhelper-dock-head {
+  border-bottom: none;
+}
+
 /* ===== Dark theme adaptation ===== */
 @media (prefers-color-scheme: dark) {
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup { background: #1e1e1e; color: #e0e0e0; }
@@ -779,6 +903,13 @@
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup-empty { color: #888; }
   .rhelper-color-palette:not([data-theme="light"]) { background: #2a2a2a; border-color: #444; }
   .rhelper-color-palette:not([data-theme="light"]) .rhelper-color-remove { background: #2a2a2a; }
+  .rhelper-dock:not([data-theme="light"]) { background: #1e1e1e; border-color: #444; color: #e0e0e0; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-head { background: #2a2a2a; border-bottom-color: #444; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-count { background: #3a3a3a; color: #bbb; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-btn { color: #aaa; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-btn:hover { background: #3a3a3a; color: #fff; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-num { color: #79b8ff; background: #2a2a2a; border-color: #444; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-num:hover { background: #1c2d41; border-color: #79b8ff; }
 }
 
 /* Forced dark theme */
@@ -817,6 +948,13 @@
 .rhelper-overlay[data-theme="dark"] .rhelper-popup-empty { color: #888; }
 .rhelper-color-palette[data-theme="dark"] { background: #2a2a2a; border-color: #444; }
 .rhelper-color-palette[data-theme="dark"] .rhelper-color-remove { background: #2a2a2a; }
+.rhelper-dock[data-theme="dark"] { background: #1e1e1e; border-color: #444; color: #e0e0e0; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-head { background: #2a2a2a; border-bottom-color: #444; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-count { background: #3a3a3a; color: #bbb; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-btn { color: #aaa; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-btn:hover { background: #3a3a3a; color: #fff; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-num { color: #79b8ff; background: #2a2a2a; border-color: #444; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-num:hover { background: #1c2d41; border-color: #79b8ff; }
 
 /* ===== Flash animation for scrollToCell ===== */
 @keyframes rhelper-flash-anim {

@@ -23,6 +23,27 @@
   let highlightOverlay = null;
   let currentUserName = null;
 
+  // Состояние плавающей панели «Мои в разборе» (сама панель — в конце файла).
+  // Объявлено здесь, потому что attachIframe() дёргает scheduleDockUpdate() ещё
+  // на синхронном проходе скрипта — объявления ниже попали бы в TDZ.
+  const DOCK_STATE_KEY = "dockState"; // тот же ключ объявлен в popup.js — менять парой
+  const DOCK_UPDATE_DELAY = 300;
+  const DOCK_DEFAULT_TOP = 92;    // ниже плавающей шапки Confluence
+  const DOCK_MARGIN = 16;
+  const DOCK_HEAD_KEEP = 80;      // столько пикселей панели держим видимыми у нижнего края
+  const DOCK_COLUMNS = 4;         // максимум номеров в ряду
+  // Таблицы появляются не сразу: в режиме просмотра — вскоре после document_idle,
+  // в редакторе — только когда прогрузится и отрисуется iframe
+  const DOCK_RETRY_DELAYS = [1500, 3000, 6000, 10000, 15000];
+
+  let dockEl = null;
+  let dockUpdateTimeout = null;
+  // Пока состояние не прочитано из storage, панель не строим: иначе скрытая
+  // крестиком панель успела бы мелькнуть на ранних пересчётах
+  let dockStateLoaded = false;
+  // top/left — null, пока панель не перетаскивали: тогда она сама встаёт в правый верхний угол
+  let dockState = { hidden: false, collapsed: false, top: null, left: null };
+
   // ===== Table cell detection =====
 
   function getCellColumnIndex(cell) {
@@ -325,7 +346,7 @@
         body.textContent = "";
         const errDiv = document.createElement("div");
         errDiv.className = "rhelper-error";
-        errDiv.textContent = resp?.error || "Error loading data. Make sure you are logged into Jira.";
+        errDiv.textContent = resp?.error || "Не удалось загрузить данные. Проверьте, что вы авторизованы в Jira.";
         body.appendChild(errDiv);
         return;
       }
@@ -544,6 +565,7 @@
         applyHighlight(cell, color, title);
         pushHistoryClass(cell, color, user);
         removeColorPalette();
+        scheduleDockUpdate();
       });
       palette.appendChild(swatch);
     });
@@ -557,6 +579,7 @@
       removeHighlight(cell);
       pushHistoryClass(cell, null, user);
       removeColorPalette();
+      scheduleDockUpdate();
     });
     palette.appendChild(removeSwatch);
 
@@ -746,6 +769,8 @@
       if (iframeDoc && iframeDoc.body) {
         injectCssInto(iframeDoc);
         attach(iframeDoc);
+        // Таблицы редактора живут в iframe — панель считаем после его готовности
+        scheduleDockUpdate();
       }
     } catch (e) {
       // Cross-origin iframe, ignore
@@ -1154,21 +1179,303 @@
     renderPageStats(body, stats);
   }
 
-  // ===== Message listener for popup =====
+  // ===== Плавающая панель «Мои в разборе» =====
+  //
+  // Живёт только в главном документе (content script зарегистрирован с allFrames: false),
+  // поэтому position: fixed прибит к окну, а не к iframe редактора. Ячейки при этом
+  // ищутся и в главном документе, и в iframe — через collectPageStatsAll().
 
-  function collectInProgressCells(doc, username, results) {
-    const cells = doc.querySelectorAll(IN_PROGRESS_SELECTOR);
-    cells.forEach((cell) => {
-      if (!cell.classList.contains("rhelper-painter-" + username)) return;
-      const text = cell.textContent.trim();
-      const num = extractTestCaseNumber(text);
-      if (num) {
-        results.push(num);
-      } else if (isTestCaseKeyCell(cell)) {
-        results.push(text);
+  // Расширение перезагрузили, а страницу — нет: chrome.runtime.id пропадает,
+  // а обращения к storage либо бросают TypeError, либо реджектят промис
+  function isExtensionAlive() {
+    return !!(chrome.runtime && chrome.runtime.id);
+  }
+
+  // Панель переживает потерю контекста молча: положение просто не сохранится
+  function saveDockState() {
+    if (!isExtensionAlive()) return;
+    try {
+      const saving = chrome.storage.local.set({ [DOCK_STATE_KEY]: dockState });
+      // set() возвращает промис — без catch его отказ всплыл бы как unhandled rejection
+      if (saving && typeof saving.catch === "function") saving.catch(() => {});
+    } catch (e) {
+      // Extension context invalidated
+    }
+  }
+
+  // Мои жёлтые ячейки; самые залежавшиеся сверху, с неизвестным временем покраски — в конец
+  function collectMyInProgress() {
+    if (!currentUserName) return [];
+    return collectPageStatsAll().inProgress
+      .filter((item) => item.painter === currentUserName)
+      .sort((a, b) => (a.ts || Infinity) - (b.ts || Infinity));
+  }
+
+  function removeDock() {
+    if (dockEl) {
+      dockEl.remove();
+      dockEl = null;
+    }
+  }
+
+  // Страница открыта в режиме редактирования, если появился iframe с телом TinyMCE —
+  // тот же признак, по которому isEditorContext() решает, писать ли историю покраски.
+  function isEditorPage() {
+    for (const iframe of document.querySelectorAll("iframe")) {
+      try {
+        const body = iframe.contentDocument && iframe.contentDocument.body;
+        if (body && body.classList.contains("mce-content-body")) return true;
+      } catch (e) {
+        // Cross-origin iframe, ignore
       }
+    }
+    return false;
+  }
+
+  function scheduleDockUpdate() {
+    clearTimeout(dockUpdateTimeout);
+    dockUpdateTimeout = setTimeout(updateDock, DOCK_UPDATE_DELAY);
+  }
+
+  function buildDockButton(className, text, title, onClick) {
+    const btn = document.createElement("button");
+    btn.className = "rhelper-dock-btn " + className;
+    btn.type = "button";
+    btn.textContent = text;
+    btn.title = title;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  function buildDock() {
+    const dock = document.createElement("div");
+    dock.className = "rhelper-dock";
+    R.applyThemeToElement(dock);
+
+    const head = document.createElement("div");
+    head.className = "rhelper-dock-head";
+    head.title = "Перетащите, чтобы переставить панель";
+
+    const dot = document.createElement("span");
+    dot.className = "rhelper-dock-dot";
+    head.appendChild(dot);
+
+    const title = document.createElement("span");
+    title.className = "rhelper-dock-title";
+    title.textContent = "Мои в разборе";
+    head.appendChild(title);
+
+    const count = document.createElement("span");
+    count.className = "rhelper-dock-count";
+    head.appendChild(count);
+
+    // Надпись и подсказка зависят от состояния — их проставит applyDockCollapsed()
+    const collapseBtn = buildDockButton("rhelper-dock-collapse", "−", "Свернуть", () => {
+      dockState.collapsed = !dockState.collapsed;
+      saveDockState();
+      applyDockCollapsed();
+      positionDock(); // свёрнутая панель уже развёрнутой — правый предел сдвинулся
+    });
+    head.appendChild(collapseBtn);
+
+    head.appendChild(buildDockButton("rhelper-dock-close", "×", "Скрыть панель (вернуть — в панели расширения)", () => {
+      dockState.hidden = true;
+      saveDockState();
+      removeDock();
+    }));
+
+    dock.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "rhelper-dock-list";
+    dock.appendChild(list);
+
+    dock._count = count;
+    dock._list = list;
+    dock._collapseBtn = collapseBtn;
+
+    makeDockDraggable(dock, head);
+    return dock;
+  }
+
+  function applyDockCollapsed() {
+    if (!dockEl) return;
+    dockEl.classList.toggle("rhelper-dock-is-collapsed", !!dockState.collapsed);
+    dockEl._collapseBtn.textContent = dockState.collapsed ? "+" : "−";
+    dockEl._collapseBtn.title = dockState.collapsed ? "Развернуть" : "Свернуть";
+  }
+
+  // Держит панель в пределах окна. Сверху предела нет (0), чтобы её можно было
+  // поставить вплотную к штатным панелям Confluence; снизу оставляем видимой шапку.
+  // Ширину можно передать: при перетаскивании она не меняется, и повторное чтение
+  // offsetWidth после записи style заставляло бы браузер пересчитывать раскладку на каждый шаг.
+  function clampDockPosition(left, top, width) {
+    // Ширина плавающая (панель ужимается по номерам), поэтому меряем фактическую
+    const dockWidth = width === undefined ? dockEl.offsetWidth : width;
+    const maxLeft = Math.max(DOCK_MARGIN, window.innerWidth - dockWidth - DOCK_MARGIN);
+    const maxTop = Math.max(0, window.innerHeight - DOCK_HEAD_KEEP);
+    return {
+      left: Math.min(Math.max(left, DOCK_MARGIN), maxLeft),
+      top: Math.min(Math.max(top, 0), maxTop),
+    };
+  }
+
+  // Ставит панель по сохранённой позиции, а если её нет — в правый верхний угол.
+  // Сохранённая позиция могла остаться от другого размера окна, поэтому её тоже подрезаем.
+  function positionDock() {
+    if (!dockEl) return;
+    // left === null означает «прижать к правому краю» — Infinity подрежется до максимума
+    const { left, top } = clampDockPosition(
+      dockState.left === null ? Infinity : dockState.left,
+      dockState.top === null ? DOCK_DEFAULT_TOP : dockState.top
+    );
+    dockEl.style.left = left + "px";
+    dockEl.style.top = top + "px";
+  }
+
+  // Перетаскивание на Pointer Events с захватом указателя: с mousemove на документе
+  // панель отставала от курсора, стоило увести его на iframe редактора или за окно —
+  // события доставались iframe, а mouseup там же терялся, и перетаскивание залипало.
+  // setPointerCapture адресует все события ручке, пока кнопка не отпущена.
+  function makeDockDraggable(dock, handle) {
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.target.closest(".rhelper-dock-btn")) return;
+      e.preventDefault();
+      const rect = dock.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      dock.classList.add("rhelper-dock-dragging");
+      handle.setPointerCapture(e.pointerId);
+
+      const onMove = (ev) => {
+        // Подрезаем здесь же, иначе в storage уедет позиция за краем экрана.
+        // Ширину берём из замера на старте — она за время перетаскивания не меняется
+        const pos = clampDockPosition(ev.clientX - offsetX, ev.clientY - offsetY, rect.width);
+        dockState.left = pos.left;
+        dockState.top = pos.top;
+        // Пишем стиль напрямую, а не через positionDock(): тот снова замерил бы
+        // offsetWidth, и чтение вперемешку с записью упёрлось бы в пересчёт раскладки
+        dock.style.left = pos.left + "px";
+        dock.style.top = pos.top + "px";
+      };
+      // Захват снимается браузером сам на pointerup/pointercancel — остаётся убрать слушатели
+      const onUp = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        dock.classList.remove("rhelper-dock-dragging");
+        saveDockState();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
     });
   }
+
+  // Панель минималистичная: только кликабельные номера, без подсказок при наведении.
+  // Стенд, время в разборе и комментарий строки показывает «Статистика страницы».
+  function renderDockList(items) {
+    const list = dockEl._list;
+    // Список пересобирается целиком на каждый пересчёт — место прокрутки возвращаем сами
+    const scrollTop = list.scrollTop;
+    list.textContent = "";
+    dockEl._count.textContent = items.length;
+    // Колонок не больше, чем самих номеров: пустые треки держали бы ширину панели
+    const columns = Math.max(1, Math.min(items.length, DOCK_COLUMNS));
+    list.style.gridTemplateColumns = `repeat(${columns}, minmax(50px, max-content))`;
+
+    for (const item of items) {
+      const num = document.createElement("a");
+      num.className = "rhelper-dock-num";
+      num.href = "#";
+      num.textContent = item.number;
+      num.addEventListener("click", (e) => {
+        e.preventDefault();
+        scrollToCellElement(item.cell);
+      });
+      list.appendChild(num);
+    }
+
+    list.scrollTop = scrollTop;
+  }
+
+  function updateDock() {
+    clearTimeout(dockUpdateTimeout);
+    dockUpdateTimeout = null;
+    if (!dockStateLoaded) return;
+    // Панель нужна только при разборе, то есть в режиме редактирования страницы
+    if (dockState.hidden || !isEditorPage()) {
+      removeDock();
+      return;
+    }
+
+    const items = collectMyInProgress();
+    if (items.length === 0) {
+      removeDock();
+      return;
+    }
+
+    if (!dockEl) dockEl = buildDock();
+    // Confluence перерисовывает body — панель могло вынести вместе с ним
+    if (!document.body.contains(dockEl)) document.body.appendChild(dockEl);
+
+    applyDockCollapsed();
+    renderDockList(items);
+    // Позиционируем после отрисовки: от числа номеров зависит ширина, а от неё —
+    // насколько панель можно сдвинуть вправо. Иначе прижатая к правому краю
+    // панель вылезала бы за окно по мере добавления ячеек.
+    positionDock();
+  }
+
+  async function initDock() {
+    try {
+      if (isExtensionAlive()) {
+        const data = await chrome.storage.local.get(DOCK_STATE_KEY);
+        if (data[DOCK_STATE_KEY]) Object.assign(dockState, data[DOCK_STATE_KEY]);
+      }
+    } catch (e) {
+      // Extension context invalidated — работаем с состоянием по умолчанию
+    }
+    dockStateLoaded = true;
+    await ensureCurrentUser();
+    // Несколько попыток: пока таблицы не отрисованы, список пуст и панели нет,
+    // а вручную её позвать нечем — остаётся ждать покраски ячейки.
+    // Как только панель построилась, оставшиеся попытки становятся холостыми.
+    for (const delay of DOCK_RETRY_DELAYS) {
+      setTimeout(() => {
+        if (!dockEl) updateDock();
+      }, delay);
+    }
+  }
+
+  initDock();
+  window.addEventListener("resize", positionDock);
+
+  // Панель расширения включает/выключает док через storage. Реагируем только на
+  // смену видимости: позицию и свёрнутость пишем отсюда же, и перерисовывать
+  // список на каждое перетаскивание не нужно.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[DOCK_STATE_KEY]) return;
+    const next = changes[DOCK_STATE_KEY].newValue || {};
+
+    // Сброс положения из дебаг-меню: свои записи при перетаскивании всегда числа,
+    // поэтому null здесь означает именно сброс, а не эхо собственного сохранения
+    if (next.top === null && next.left === null && (dockState.top !== null || dockState.left !== null)) {
+      dockState.top = null;
+      dockState.left = null;
+      positionDock();
+    }
+
+    if (!!next.hidden === !!dockState.hidden) return;
+    dockState.hidden = !!next.hidden;
+    updateDock();
+  });
+
+  // ===== Message listener for popup =====
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "getPageTestRunKeys") {
@@ -1179,6 +1486,8 @@
 
     if (message.action === "showPageStats") {
       showPageStatsPopup();
+      // Заодно запасной способ поднять панель, если при загрузке таблиц ещё не было
+      scheduleDockUpdate();
       sendResponse({ ok: true });
     }
 
@@ -1208,10 +1517,8 @@
           sendResponse({ username: null, cells: [] });
           return;
         }
-        const cells = [];
-        collectInProgressCells(document, username, cells);
-        forEachIframeDoc((doc) => collectInProgressCells(doc, username, cells));
-        sendResponse({ username, cells });
+        // Тот же источник, что и у панели на странице, — иначе счётчики расходятся
+        sendResponse({ username, cells: collectMyInProgress().map((item) => item.number) });
       })();
       return true;
     }

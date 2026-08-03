@@ -143,7 +143,7 @@
         body.textContent = "";
         const errDiv = document.createElement("div");
         errDiv.className = "rhelper-error";
-        errDiv.textContent = resp?.error || "Error loading data. Make sure you are logged into Jira.";
+        errDiv.textContent = resp?.error || "Не удалось загрузить данные. Проверьте, что вы авторизованы в Jira.";
         body.appendChild(errDiv);
         return;
       }

@@ -46,6 +46,7 @@
       <button id="debugShowRaw" class="rhelper-popup-debug-btn">Показать raw данные</button>
       <button id="debugSimulateUpdate" class="rhelper-popup-debug-btn">Симулировать обновление</button>
       <button id="debugResetWhatsNew" class="rhelper-popup-debug-btn">Сбросить «Что нового»</button>
+      <button id="debugResetDockPos" class="rhelper-popup-debug-btn">Сбросить положение панели</button>
       <button id="debugFullReset" class="rhelper-popup-debug-btn rhelper-popup-debug-btn-danger">Полный reset</button>
     </div>
     <div class="rhelper-popup-debug-row">
@@ -62,6 +63,10 @@
       <span class="rhelper-popup-inprogress-count" id="inProgressCount">0</span>
     </div>
     <div class="rhelper-popup-inprogress-list" id="inProgressList"></div>
+    <label class="rhelper-popup-inprogress-toggle" title="Плавающая панель со списком; показывается на странице в режиме редактирования">
+      <input type="checkbox" id="dockToggle">
+      <span>Панель на странице при редактировании</span>
+    </label>
   </div>
 
   <div id="mainContent">

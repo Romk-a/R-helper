@@ -181,10 +181,12 @@ body {
   margin: 1px 0;
 }
 
-/* Группа пунктов: заголовок без маркера, подпункты — вложенным списком */
+/* Группа пунктов: заголовок без маркера, подпункты — вложенным списком.
+   Заголовок стоит на уровне текста обычных пунктов, а подпункты сдвинуты глубже —
+   иначе подпункт группы и одиночный пункт версии выглядят одинаково. */
 .rhelper-popup-whatsnew-items > li.rhelper-popup-whatsnew-group {
   list-style: none;
-  margin: 5px 0 2px -18px;
+  margin: 5px 0 2px;
   font-weight: 600;
 }
 
@@ -192,9 +194,14 @@ body {
   margin-top: 0;
 }
 
+/* Одиночный пункт после группы — с отбивкой, чтобы не читался её продолжением */
+.rhelper-popup-whatsnew-items > li.rhelper-popup-whatsnew-group + li:not(.rhelper-popup-whatsnew-group) {
+  margin-top: 6px;
+}
+
 .rhelper-popup-whatsnew-subitems {
   margin: 2px 0 0;
-  padding-left: 18px;
+  padding-left: 16px;
   list-style: disc;
   font-weight: 400;
 }
@@ -255,6 +262,21 @@ body {
 
 .rhelper-popup-inprogress-link:hover {
   text-decoration: underline;
+}
+
+.rhelper-popup-inprogress-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #5d4037;
+  cursor: pointer;
+}
+
+.rhelper-popup-inprogress-toggle input {
+  margin: 0;
+  cursor: pointer;
 }
 
 .rhelper-popup-stats {
@@ -880,6 +902,7 @@ body {
   :root:not([data-theme="light"]) .rhelper-popup-inprogress-count { color: #ffcc80; }
   :root:not([data-theme="light"]) .rhelper-popup-inprogress-list { color: #d7ccc8; }
   :root:not([data-theme="light"]) .rhelper-popup-inprogress-link { color: #79b8ff; }
+  :root:not([data-theme="light"]) .rhelper-popup-inprogress-toggle { color: #d7ccc8; }
   :root:not([data-theme="light"]) .rhelper-popup-update-banner { background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); border-color: #4caf50; }
   :root:not([data-theme="light"]) .rhelper-popup-update-text { color: #a5d6a7; }
   :root:not([data-theme="light"]) .rhelper-popup-update-version { color: #c8e6c9; }
@@ -959,6 +982,7 @@ body {
 :root[data-theme="dark"] .rhelper-popup-inprogress-count { color: #ffcc80; }
 :root[data-theme="dark"] .rhelper-popup-inprogress-list { color: #d7ccc8; }
 :root[data-theme="dark"] .rhelper-popup-inprogress-link { color: #79b8ff; }
+:root[data-theme="dark"] .rhelper-popup-inprogress-toggle { color: #d7ccc8; }
 :root[data-theme="dark"] .rhelper-popup-update-banner { background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); border-color: #4caf50; }
 :root[data-theme="dark"] .rhelper-popup-update-text { color: #a5d6a7; }
 :root[data-theme="dark"] .rhelper-popup-update-version { color: #c8e6c9; }

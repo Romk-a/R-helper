@@ -84,13 +84,13 @@
       try {
         chrome.runtime.sendMessage(msg, (resp) => {
           if (chrome.runtime.lastError) {
-            resolve({ error: "Extension was reloaded. Please refresh the page." });
+            resolve({ error: "Расширение было перезагружено. Обновите страницу." });
           } else {
             resolve(resp);
           }
         });
       } catch (e) {
-        resolve({ error: "Extension was reloaded. Please refresh the page." });
+        resolve({ error: "Расширение было перезагружено. Обновите страницу." });
       }
     });
   }
@@ -196,7 +196,7 @@
     if (!resp || resp.error) {
       const errSpan = document.createElement("span");
       errSpan.style.color = "#ff8a80";
-      errSpan.textContent = resp?.error || "Error loading data";
+      errSpan.textContent = resp?.error || "Не удалось загрузить данные";
       tooltip.appendChild(errSpan);
       appendMoreButton();
       return tooltip;
@@ -205,7 +205,7 @@
     if (!resp.found) {
       const nfSpan = document.createElement("span");
       nfSpan.style.color = "#999";
-      nfSpan.textContent = "Test result not found";
+      nfSpan.textContent = "Результат выполнения не найден";
       tooltip.appendChild(nfSpan);
       appendMoreButton();
       return tooltip;
