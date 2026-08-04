@@ -476,6 +476,19 @@
     if (input) input.placeholder = stored.lastSeenVersion || "не задано";
   }
 
+  // Отдельным окном, а не вкладкой: за цифрами наблюдают, продолжая работать со страницей,
+  // а popup закрылся бы при первом же клике мимо него
+  document.getElementById("debugPerfPanel").addEventListener("click", async () => {
+    const url = chrome.runtime.getURL("perf.html");
+    try {
+      await chrome.windows.create({ url, type: "popup", width: 820, height: 720 });
+      window.close();
+    } catch (e) {
+      // На случай, если windows.create недоступен — открыть вкладкой
+      chrome.tabs.create({ url });
+    }
+  });
+
   document.getElementById("debugResetVersionCache").addEventListener("click", async () => {
     await chrome.storage.local.remove("versionCheck");
     await sendMessage({ action: "setUpdateBadge", show: false });

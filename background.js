@@ -27,6 +27,90 @@ function logCache(action, details) {
   if (cacheLog.length > CACHE_LOG_MAX) cacheLog.splice(0, cacheLog.length - CACHE_LOG_MAX);
 }
 
+// ===== Замеры производительности =====
+//
+// MV3 выгружает service worker через ~30 с простоя, поэтому держать замеры только
+// в памяти нельзя: панель, открытая после любой паузы, показывала бы пустоту.
+// Статистика сохраняется в storage, но так, чтобы почти ничего не стоить: запись
+// откладывается на PERF_PERSIST_DELAY и по возможности уезжает «прицепом» к записи
+// прогонов (см. persistDirtyRuns), а сама persistPerf() ничего не замеряет.
+
+const perfLog = [];
+// Одно число и для памяти, и для диска: при разных значениях лог схлопывался бы
+// на каждом засыпании воркера до меньшего из них, а большее почти не достигалось
+const PERF_LOG_MAX = 200;
+const perfStartedAt = Date.now();
+const PERF_KEY = "perfStats";
+const PERF_PERSIST_DELAY = 5000;
+
+// Накопительные итоги по op: { count, total, max, bytes }. Переживают выгрузку
+// service worker'а, поэтому показывают картину за дни, а не за текущую сессию.
+let perfTotals = {};
+let perfSince = Date.now(); // с какого момента копятся итоги (сбрасывается кнопкой)
+let perfDirty = false;
+let perfPersistTimer = null;
+
+// op — что мерили ("persist", "fetch", …), bytes необязателен
+function logPerf(op, ms, details, bytes) {
+  const value = Math.round(ms * 10) / 10;
+  perfLog.push({ ts: Date.now(), op, ms: value, details, bytes: bytes || 0 });
+  if (perfLog.length > PERF_LOG_MAX) perfLog.splice(0, perfLog.length - PERF_LOG_MAX);
+
+  const t = perfTotals[op] || (perfTotals[op] = { count: 0, total: 0, max: 0, bytes: 0 });
+  t.count++;
+  t.total = Math.round((t.total + value) * 10) / 10;
+  t.bytes += bytes || 0;
+  if (value > t.max) t.max = value;
+
+  schedulePerfPersist();
+}
+
+// Статистику сохраняем редко и по возможности «прицепом» к записи прогонов
+// (см. persistDirtyRuns) — иначе замеры сами добавляли бы работу тому, что замеряют.
+function schedulePerfPersist() {
+  perfDirty = true;
+  if (perfPersistTimer) return;
+  perfPersistTimer = setTimeout(() => {
+    perfPersistTimer = null;
+    persistPerf();
+  }, PERF_PERSIST_DELAY);
+}
+
+function perfPayload() {
+  return { totals: perfTotals, log: perfLog, since: perfSince, savedAt: Date.now() };
+}
+
+// Намеренно без logPerf(): замерять запись собственной статистики — рекурсия без пользы
+async function persistPerf() {
+  if (!perfDirty) return;
+  perfDirty = false;
+  try {
+    await chrome.storage.local.set({ [PERF_KEY]: perfPayload() });
+  } catch (e) {
+    logCache("PERF_ERR", e.message);
+  }
+}
+
+function formatKb(bytes) {
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + " МБ";
+  return Math.round(bytes / 1024) + " КБ";
+}
+
+// Строится из накопительных итогов, а не из perfLog: лог хранит только последние
+// PERF_LOG_MAX записей, а итоги считают всё, что было с момента perfSince
+function summarizePerf() {
+  return Object.entries(perfTotals)
+    .map(([op, t]) => ({
+      op,
+      count: t.count,
+      total: t.total,
+      max: t.max,
+      bytes: t.bytes || 0,
+      avg: Math.round((t.total / t.count) * 10) / 10,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
 function getCached(cache, key) {
   const entry = cache.get(key);
   if (!entry) return null;
@@ -40,18 +124,52 @@ function getCached(cache, key) {
 
 function setCache(cache, key, data) {
   cache.set(key, { data, ts: Date.now() });
+  // Прогоны лежат в storage по одному ключу на прогон — пишем только изменившийся
   if (cache === testRunCache) {
-    persistCache("testRunCache", testRunCache);
-  } else if (cache === attachmentsCache) {
-    persistCache("attachmentsCache", attachmentsCache);
-  } else if (cache === testCaseCache) {
-    persistCache("testCaseCache", testCaseCache);
-  } else if (cache === testCaseInfoCache) {
-    persistCache("testCaseInfoCache", testCaseInfoCache);
+    scheduleRunPersist(key);
+    return;
   }
+  const name = cacheName(cache);
+  if (name) schedulePersist(name, cache);
+}
+
+function cacheName(cache) {
+  if (cache === attachmentsCache) return "attachmentsCache";
+  if (cache === testCaseCache) return "testCaseCache";
+  if (cache === testCaseInfoCache) return "testCaseInfoCache";
+  return null;
+}
+
+// Запись всего кэша целиком стоит дорого (сериализация + запись в LevelDB), а при
+// префетче setCache() дёргается на каждый прогон подряд. Поэтому запись откладывается
+// и слипается: N подряд идущих обновлений одного кэша дают одну запись на диск.
+const PERSIST_DELAY = 1000;
+const persistTimers = new Map();
+
+function schedulePersist(name, map) {
+  if (persistTimers.has(name)) return; // запись уже назначена — она подхватит и это обновление
+  persistTimers.set(name, setTimeout(() => {
+    persistTimers.delete(name);
+    persistCache(name, map);
+  }, PERSIST_DELAY));
+}
+
+// Отложенная запись пережила бы очистку кэша и вернула бы в storage пустой объект
+function cancelPendingPersists() {
+  for (const timer of persistTimers.values()) clearTimeout(timer);
+  persistTimers.clear();
+  clearTimeout(runPersistTimer);
+  runPersistTimer = null;
+  dirtyRuns.clear();
 }
 
 async function persistCache(name, map) {
+  // Назначенная запись больше не нужна: этот вызов пишет тот же кэш целиком
+  const pending = persistTimers.get(name);
+  if (pending) {
+    clearTimeout(pending);
+    persistTimers.delete(name);
+  }
   try {
     const plain = {};
     for (const [key, entry] of map) {
@@ -65,22 +183,177 @@ async function persistCache(name, map) {
   }
 }
 
-async function restoreCaches() {
+// ===== Кэш прогонов: по одному ключу storage на прогон =====
+//
+// Раньше весь кэш прогонов лежал под единственным ключом "testRunCache", поэтому
+// добавление одного прогона (~1 МБ) переписывало на диск всё разом (десятки МБ),
+// а старт service worker'а читал и парсил их целиком, задерживая первый ответ.
+// Теперь каждый прогон — свой ключ, а при старте читается только индекс; сами
+// прогоны подтягиваются по обращению (см. getCachedRun).
+
+const RUN_KEY_PREFIX = "testRun:";
+const RUN_INDEX_KEY = "testRunIndex";
+const LEGACY_RUN_CACHE_KEY = "testRunCache";
+
+// runKey -> { ts, count }: что лежит на диске. count нужен панели расширения,
+// которая показывает число результатов, не загружая сами прогоны.
+let testRunIndex = {};
+const dirtyRuns = new Set();
+let runPersistTimer = null;
+
+function runStorageKey(runKey) {
+  return RUN_KEY_PREFIX + runKey;
+}
+
+function scheduleRunPersist(runKey) {
+  dirtyRuns.add(runKey);
+  if (runPersistTimer) return; // запись уже назначена — она подхватит и этот прогон
+  runPersistTimer = setTimeout(persistDirtyRuns, PERSIST_DELAY);
+}
+
+// Все накопившиеся прогоны уходят одним storage.set вместе с индексом:
+// при префетче это одна запись на пачку вместо записи на каждый прогон.
+async function persistDirtyRuns() {
+  runPersistTimer = null;
+  if (dirtyRuns.size === 0) return;
+
+  const keys = [...dirtyRuns];
+  dirtyRuns.clear();
+
+  const t0 = performance.now();
   try {
-    const data = await chrome.storage.local.get(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser"]);
-    if (data.testRunCache || data.attachmentsCache || data.testCaseCache || data.testCaseInfoCache) {
+    const writes = {};
+    let results = 0;
+    for (const runKey of keys) {
+      const entry = testRunCache.get(runKey);
+      if (!entry) continue; // прогон успели удалить, пока ждали записи
+      const data = entry.data instanceof Map ? [...entry.data] : entry.data;
+      writes[runStorageKey(runKey)] = { data, ts: entry.ts };
+      testRunIndex[runKey] = { ts: entry.ts, count: entry.data instanceof Map ? entry.data.size : 0 };
+      results += data.length;
+    }
+    writes[RUN_INDEX_KEY] = testRunIndex;
+    // Раз уж пишем — заодно сохраняем накопленную статистику, чтобы не делать
+    // ради неё отдельный поход в storage. Замер ниже включает и её объём.
+    if (perfDirty) {
+      writes[PERF_KEY] = perfPayload();
+      perfDirty = false;
+      clearTimeout(perfPersistTimer);
+      perfPersistTimer = null;
+    }
+    await chrome.storage.local.set(writes);
+    const ms = performance.now() - t0;
+    // Размер намеренно не считаем: JSON.stringify ради статистики удвоил бы стоимость записи.
+    // Объём на диске панель берёт из getBytesInUse(), когда её открывают.
+    logPerf("persist", ms, keys.length + " прогонов, " + results + " результатов: " + keys.join(", "));
+    logCache("PERSIST_RUNS", keys.length + " прогонов за " + Math.round(ms) + " мс: " + keys.join(", "));
+  } catch (e) {
+    // Ключи уже вынуты из dirtyRuns — возвращаем, иначе прогоны остались бы только
+    // в памяти и пропали бы вместе с воркером. Таймер не взводим: повтор случится
+    // при следующей записи, а немедленная повторная попытка при полном диске зациклилась бы.
+    for (const runKey of keys) dirtyRuns.add(runKey);
+    perfDirty = true;
+    logPerf("persist", performance.now() - t0, "ошибка: " + e.message);
+    logCache("PERSIST_ERR", "runs: " + e.message);
+  }
+}
+
+// Прогон из памяти, а если его там нет — с диска. Единственное место, где прогон
+// поднимается в память, поэтому TTL проверяется здесь же — и для памяти, и для диска.
+async function getCachedRun(runKey) {
+  const entry = testRunCache.get(runKey);
+  if (entry) {
+    if (Date.now() - entry.ts > CACHE_TTL) {
+      await dropRun(runKey); // чистит и память, и диск, и индекс
+      logCache("EXPIRED", runKey);
+      return null;
+    }
+    return entry.data;
+  }
+
+  const meta = testRunIndex[runKey];
+  if (!meta) return null;
+  if (Date.now() - meta.ts > CACHE_TTL) {
+    await dropRun(runKey);
+    logCache("EXPIRED", runKey);
+    return null;
+  }
+
+  try {
+    const t0 = performance.now();
+    const stored = await chrome.storage.local.get(runStorageKey(runKey));
+    const value = stored[runStorageKey(runKey)];
+    if (!value) {
+      await dropRun(runKey); // индекс разошёлся с реальностью
+      return null;
+    }
+    const map = new Map(value.data);
+    testRunCache.set(runKey, { data: map, ts: value.ts });
+    const ms = performance.now() - t0;
+    logPerf("load", ms, runKey + " → " + map.size + " результатов");
+    logCache("LOAD", runKey + " → " + map.size + " results за " + Math.round(ms) + " мс");
+    return map;
+  } catch (e) {
+    logCache("LOAD_ERR", runKey + ": " + e.message);
+    return null;
+  }
+}
+
+async function dropRun(runKey) {
+  testRunCache.delete(runKey);
+  dirtyRuns.delete(runKey);
+  delete testRunIndex[runKey];
+  try {
+    await chrome.storage.local.remove(runStorageKey(runKey));
+    await chrome.storage.local.set({ [RUN_INDEX_KEY]: testRunIndex });
+  } catch (e) {
+    logCache("DROP_ERR", runKey + ": " + e.message);
+  }
+}
+
+// Старый формат: всё в одном ключе. Раскладываем по ключам и удаляем исходный.
+async function migrateLegacyRunCache(legacy) {
+  const now = Date.now();
+  const writes = {};
+  let migrated = 0;
+  for (const [runKey, value] of Object.entries(legacy)) {
+    if (!value || !value.ts || now - value.ts > CACHE_TTL) continue;
+    const data = Array.isArray(value.data) ? value.data.map(([k, r]) => [k, slimResult(r)]) : [];
+    writes[runStorageKey(runKey)] = { data, ts: value.ts };
+    testRunIndex[runKey] = { ts: value.ts, count: data.length };
+    migrated++;
+  }
+  writes[RUN_INDEX_KEY] = testRunIndex;
+  await chrome.storage.local.set(writes);
+  await chrome.storage.local.remove(LEGACY_RUN_CACHE_KEY);
+  logCache("MIGRATE", "прогонов разложено по ключам: " + migrated);
+}
+
+async function restoreCaches() {
+  const tStart = performance.now();
+  try {
+    const data = await chrome.storage.local.get([LEGACY_RUN_CACHE_KEY, RUN_INDEX_KEY, PERF_KEY, "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser"]);
+    // Статистика переживает выгрузку воркера — иначе панель показывала бы пустоту
+    // всякий раз, когда её открывают после паузы в работе
+    if (data[PERF_KEY]) {
+      perfTotals = data[PERF_KEY].totals || {};
+      perfSince = data[PERF_KEY].since || Date.now();
+      if (Array.isArray(data[PERF_KEY].log)) perfLog.push(...data[PERF_KEY].log.slice(-PERF_LOG_MAX));
+    }
+    if (data[LEGACY_RUN_CACHE_KEY] || data[RUN_INDEX_KEY] || data.attachmentsCache || data.testCaseCache || data.testCaseInfoCache) {
       const now = Date.now();
       let expired = 0;
-      if (data.testRunCache) {
-        for (const [key, value] of Object.entries(data.testRunCache)) {
-          if (value && value.ts && now - value.ts <= CACHE_TTL) {
-            const d = Array.isArray(value.data) ? new Map(value.data) : value.data;
-            testRunCache.set(key, { data: d, ts: value.ts });
-          } else {
-            expired++;
-          }
+      // Индекс прогонов читается всегда, сами прогоны — только по обращению (getCachedRun)
+      testRunIndex = data[RUN_INDEX_KEY] || {};
+      const expiredRuns = [];
+      for (const [runKey, meta] of Object.entries(testRunIndex)) {
+        if (!meta || !meta.ts || now - meta.ts > CACHE_TTL) {
+          delete testRunIndex[runKey];
+          expiredRuns.push(runStorageKey(runKey));
+          expired++;
         }
       }
+      if (expiredRuns.length) await chrome.storage.local.remove(expiredRuns);
       if (data.attachmentsCache) {
         for (const [key, value] of Object.entries(data.attachmentsCache)) {
           if (value && value.ts && now - value.ts <= CACHE_TTL) {
@@ -111,9 +384,14 @@ async function restoreCaches() {
       if (data.currentUser && data.currentUser.ts && now - data.currentUser.ts <= CACHE_TTL) {
         cachedCurrentUser = data.currentUser.data;
       }
-      logCache("RESTORE", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size + ", expired: " + expired);
+      logCache("RESTORE", "testRuns в индексе: " + Object.keys(testRunIndex).length + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size + ", expired: " + expired);
+      // Разложить старый единый ключ по отдельным — единожды, после обновления расширения
+      if (data[LEGACY_RUN_CACHE_KEY]) {
+        await migrateLegacyRunCache(data[LEGACY_RUN_CACHE_KEY]);
+      } else if (expired > 0) {
+        await chrome.storage.local.set({ [RUN_INDEX_KEY]: testRunIndex });
+      }
       if (expired > 0) {
-        persistCache("testRunCache", testRunCache);
         persistCache("attachmentsCache", attachmentsCache);
         persistCache("testCaseCache", testCaseCache);
         persistCache("testCaseInfoCache", testCaseInfoCache);
@@ -121,7 +399,10 @@ async function restoreCaches() {
     } else {
       logCache("RESTORE", "storage empty");
     }
+    // Ради этого замера всё и затевалось: раньше здесь читались и парсились все прогоны
+    logPerf("startup", performance.now() - tStart, "индекс: " + Object.keys(testRunIndex).length + " прогонов");
   } catch (e) {
+    logPerf("startup", performance.now() - tStart, "ошибка: " + e.message);
     logCache("RESTORE_ERR", e.message);
   }
 }
@@ -421,10 +702,18 @@ function checkAuthResponse(resp, context) {
   throw new Error(`${context}: ${resp.status} ${resp.statusText}`);
 }
 
+// Из результата прогона наружу уходят только три поля (см. handleGetTestResult), а API
+// отдаёт вместе с ними все шаги теста с описаниями — это полтора мегабайта на прогон,
+// которые потом заново сериализуются при каждой записи кэша. Храним только нужное.
+function slimResult(r) {
+  if (!r || typeof r !== "object") return { id: null, comment: null, status: null };
+  return { id: r.id, comment: r.comment, status: r.status };
+}
+
 async function fetchTestRunResults(testRunKey) {
   ensureConfigured();
 
-  const cached = getCached(testRunCache, testRunKey);
+  const cached = await getCachedRun(testRunKey);
   if (cached) {
     logCache("HIT", testRunKey);
     return cached;
@@ -438,11 +727,16 @@ async function fetchTestRunResults(testRunKey) {
   logCache("FETCH", testRunKey);
   const promise = (async () => {
     const url = `${JIRA_BASE}/rest/atm/1.0/testrun/${testRunKey}/testresults`;
+    const t0 = performance.now();
     const resp = await fetch(url, { credentials: "include" });
     checkAuthResponse(resp, "Ошибка загрузки результатов");
-    const data = await resp.json();
-    const map = new Map(Array.isArray(data) ? data.map((r) => [r.testCaseKey, r]) : []);
-    logCache("FETCHED", testRunKey + " → " + map.size + " results");
+    // Читаем текстом, чтобы знать реальный объём: сузить ответ через ?fields= сервер не даёт
+    const text = await resp.text();
+    const ms = performance.now() - t0;
+    const data = JSON.parse(text);
+    const map = new Map(Array.isArray(data) ? data.map((r) => [r.testCaseKey, slimResult(r)]) : []);
+    logPerf("fetch", ms, testRunKey + " → " + map.size + " результатов", text.length);
+    logCache("FETCHED", testRunKey + " → " + map.size + " results, " + formatKb(text.length) + " за " + Math.round(ms) + " мс");
     setCache(testRunCache, testRunKey, map);
     return map;
   })();
@@ -669,18 +963,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "getCacheStatus") {
     initReady.then(async () => {
       const manifest = chrome.runtime.getManifest();
-      const testRuns = [];
-      for (const [key, entry] of testRunCache) {
-        const results = entry && entry.data;
-        testRuns.push({ key, resultsCount: results instanceof Map ? results.size : 0 });
-      }
+      // Список берётся из индекса, а не из памяти: прогоны загружаются лениво,
+      // и в памяти лежат только те, к которым уже обращались в этой сессии
+      const testRuns = Object.entries(testRunIndex).map(([key, meta]) => ({
+        key,
+        resultsCount: (meta && meta.count) || 0,
+      }));
       let storageBytesUsed = 0;
       if (typeof chrome.storage.local.getBytesInUse === 'function') {
-        storageBytesUsed = await chrome.storage.local.getBytesInUse(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache"]);
+        const runKeys = Object.keys(testRunIndex).map(runStorageKey);
+        storageBytesUsed = await chrome.storage.local.getBytesInUse(
+          [...runKeys, RUN_INDEX_KEY, "attachmentsCache", "testCaseCache", "testCaseInfoCache"]
+        );
       }
       sendResponse({
         testRuns,
-        testRunCacheSize: testRunCache.size,
+        testRunCacheSize: testRuns.length,
         attachmentsCacheSize: attachmentsCache.size,
         testCaseCacheSize: testCaseCache.size,
         testCaseInfoCacheSize: testCaseInfoCache.size,
@@ -692,6 +990,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     });
     return true;
+  }
+
+  if (message.action === "getPerfStats") {
+    initReady.then(async () => {
+      const runKeys = Object.keys(testRunIndex);
+      let storageBytes = 0;
+      let runsBytes = 0;
+      if (typeof chrome.storage.local.getBytesInUse === "function") {
+        try {
+          runsBytes = await chrome.storage.local.getBytesInUse(runKeys.map(runStorageKey));
+          storageBytes = await chrome.storage.local.getBytesInUse(null);
+        } catch (e) { /* Firefox не реализует getBytesInUse */ }
+      }
+      sendResponse({
+        entries: perfLog.slice().reverse(), // свежие сверху
+        summary: summarizePerf(),
+        startedAt: perfStartedAt,
+        // Число стартов service worker'а — сколько раз он выгружался и поднимался
+        wakeups: (perfTotals.startup && perfTotals.startup.count) || 0,
+        since: perfSince,
+        runs: runKeys.length,
+        runsInMemory: testRunCache.size,
+        runsBytes,
+        storageBytes,
+      });
+    });
+    return true;
+  }
+
+  if (message.action === "resetPerfStats") {
+    perfLog.length = 0;
+    perfTotals = {};
+    perfSince = Date.now();
+    perfDirty = false;
+    clearTimeout(perfPersistTimer);
+    perfPersistTimer = null;
+    chrome.storage.local.remove(PERF_KEY);
+    sendResponse({ success: true });
+    return false;
   }
 
   if (message.action === "getCacheLog") {
@@ -712,25 +1049,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "deleteCacheEntry") {
-    initReady.then(() => {
+    initReady.then(async () => {
       const key = message.testRunKey;
-      const deleted = testRunCache.delete(key);
-      logCache("DELETE", key + (deleted ? " removed" : " not found"));
-      persistCache("testRunCache", testRunCache);
-      sendResponse({ success: deleted });
+      const existed = testRunCache.has(key) || !!testRunIndex[key];
+      await dropRun(key);
+      logCache("DELETE", key + (existed ? " removed" : " not found"));
+      sendResponse({ success: existed });
     });
     return true;
   }
 
   if (message.action === "clearCache") {
-    initReady.then(() => {
-      logCache("CLEAR", "testRuns: " + testRunCache.size + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size);
+    initReady.then(async () => {
+      logCache("CLEAR", "testRuns: " + Object.keys(testRunIndex).length + ", attachments: " + attachmentsCache.size + ", testCases: " + testCaseCache.size + ", testCaseInfo: " + testCaseInfoCache.size);
+      cancelPendingPersists();
+      // Каждый прогон — свой ключ storage, поэтому список удаляемых строится по индексу
+      const runKeys = Object.keys(testRunIndex).map(runStorageKey);
+      testRunIndex = {};
       testRunCache.clear();
       attachmentsCache.clear();
       testCaseCache.clear();
       testCaseInfoCache.clear();
       cachedCurrentUser = null;
-      chrome.storage.local.remove(["testRunCache", "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser"]);
+      await chrome.storage.local.remove([
+        ...runKeys, RUN_INDEX_KEY, LEGACY_RUN_CACHE_KEY,
+        "attachmentsCache", "testCaseCache", "testCaseInfoCache", "currentUser",
+      ]);
       sendResponse({ success: true });
     });
     return true;

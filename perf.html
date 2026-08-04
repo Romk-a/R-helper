@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>R-Helper — производительность</title>
+  <link rel="stylesheet" href="perf.css">
+</head>
+<body>
+  <div class="perf-header">
+    <div>
+      <div class="perf-title">Производительность</div>
+      <div class="perf-subtitle" id="sessionInfo">сессия service worker'а</div>
+    </div>
+    <button id="themeBtn" class="rhelper-theme-btn" title="Тема"></button>
+  </div>
+
+  <div class="perf-cards" id="storageCards"></div>
+
+  <div class="perf-section">
+    <div class="perf-section-head">
+      <span class="perf-section-title">Операции</span>
+      <span class="perf-hint">за всё время наблюдения</span>
+    </div>
+    <table class="perf-table" id="summaryTable">
+      <thead>
+        <tr><th>Операция</th><th class="perf-num">Раз</th><th class="perf-num">Среднее</th><th class="perf-num">Худшее</th><th class="perf-num">Всего</th></tr>
+      </thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+    <div class="perf-empty" id="summaryEmpty">Пока ничего не измерено — поработайте со страницей и обновите.</div>
+  </div>
+
+  <div class="perf-section">
+    <div class="perf-section-head">
+      <span class="perf-section-title">Последние операции</span>
+      <span class="perf-hint-left">хранятся последние 200</span>
+      <span class="perf-hint" id="entriesCount"></span>
+    </div>
+    <div class="perf-log" id="entriesList"></div>
+  </div>
+
+  <div class="perf-footer">
+    <label class="perf-check">
+      <input type="checkbox" id="autoRefresh">
+      <span>Автообновление</span>
+    </label>
+    <span class="perf-warn" id="autoWarn" hidden>не даёт service worker'у уснуть</span>
+    <div class="perf-footer-spacer"></div>
+    <button id="copyBtn" class="perf-btn perf-btn-primary">Скопировать</button>
+    <button id="refreshBtn" class="perf-btn">Обновить</button>
+    <button id="resetBtn" class="perf-btn">Сбросить</button>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="perf.js"></script>
+</body>
+</html>

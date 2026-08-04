@@ -88,6 +88,9 @@ SHARED_FILES=(
     popup.html
     popup.js
     popup.css
+    perf.html
+    perf.js
+    perf.css
     theme.js
     changelog.js
     options.html
