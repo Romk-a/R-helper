@@ -35,9 +35,18 @@
   // Таблицы появляются не сразу: в режиме просмотра — вскоре после document_idle,
   // в редакторе — только когда прогрузится и отрисуется iframe
   const DOCK_RETRY_DELAYS = [1500, 3000, 6000, 10000, 15000];
+  // Сколько ячеек можно держать в разборе, не получая напоминания
+  const IN_PROGRESS_LIMIT = 3;
+  const LIMIT_TOAST_TIMEOUT = 8000;
 
   let dockEl = null;
   let dockUpdateTimeout = null;
+  // Сколько ячеек было в разборе на прошлом пересчёте; null — считаем впервые.
+  // Первый пересчёт только запоминает число: иначе открытие страницы с уже накопленным
+  // разбором каждый раз встречало бы напоминанием
+  let lastCount = null;
+  let limitToastEl = null;
+  let limitToastTimeout = null;
   // Пока состояние не прочитано из storage, панель не строим: иначе скрытая
   // крестиком панель успела бы мелькнуть на ранних пересчётах
   let dockStateLoaded = false;
@@ -1219,6 +1228,80 @@
       .sort(compareByPaintTime);
   }
 
+  function removeLimitToast() {
+    clearTimeout(limitToastTimeout);
+    limitToastTimeout = null;
+    if (limitToastEl) {
+      limitToastEl.remove();
+      limitToastEl = null;
+    }
+  }
+
+  function showLimitToast(count) {
+    removeLimitToast();
+
+    const toast = document.createElement("div");
+    toast.className = "rhelper-limit-toast";
+    R.applyThemeToElement(toast);
+
+    // Заголовок с текстом — в своей колонке, чтобы заголовок центрировался по тексту,
+    // а не по всему тосту вместе с кнопкой
+    const body = document.createElement("div");
+    body.className = "rhelper-limit-toast-body";
+
+    const title = document.createElement("div");
+    title.className = "rhelper-limit-toast-title";
+    title.textContent = "Много ячеек в разборе!";
+    body.appendChild(title);
+
+    const text = document.createElement("div");
+    text.className = "rhelper-limit-toast-text";
+    text.textContent = "У вас в разборе " + count + " " +
+      pluralRu(count, "ячейка", "ячейки", "ячеек") +
+      ". Рекомендуется не больше " + IN_PROGRESS_LIMIT + ".";
+    body.appendChild(text);
+
+    toast.appendChild(body);
+
+    const btn = document.createElement("button");
+    btn.className = "rhelper-limit-toast-btn";
+    btn.type = "button";
+    btn.textContent = "Понятно";
+    btn.addEventListener("click", removeLimitToast);
+    toast.appendChild(btn);
+
+    document.body.appendChild(toast);
+    limitToastEl = toast;
+    limitToastTimeout = setTimeout(removeLimitToast, LIMIT_TOAST_TIMEOUT);
+  }
+
+  // Напоминаем на каждую покраску сверх порога, но именно на покраску, а не на любой
+  // пересчёт: updateDock() зовут ещё и ретраи после инициализации, и attachIframe(),
+  // и «Статистика страницы» — проверка на «больше порога» выдавала бы тост на каждый
+  // из них. Поэтому сравниваем с прошлым счётом и говорим только о росте.
+  function checkInProgressLimit(items) {
+    const count = items.length;
+    const prev = lastCount;
+
+    // Точку отсчёта задаём по первому непустому пересчёту. Ноль здесь неотличим от
+    // «считать ещё нечего»: collectMyInProgress() отдаёт пустой список, пока не ответил
+    // getCurrentUser, а attachIframe() зовёт пересчёт, едва у iframe появился body —
+    // задолго до того, как редактор отрисует таблицы. Взяв такой ноль за базу, мы бы
+    // объявили ростом первое же появление уже накрашенных ячеек и показали напоминание
+    // на странице, где пользователь ничего не красил.
+    if (prev === null) {
+      if (count > 0) lastCount = count;
+      return;
+    }
+
+    lastCount = count;
+    if (count <= IN_PROGRESS_LIMIT) {
+      removeLimitToast();
+      return;
+    }
+    if (count > prev) showLimitToast(count);
+  }
+
   function removeDock() {
     if (dockEl) {
       dockEl.remove();
@@ -1391,7 +1474,10 @@
     // Список пересобирается целиком на каждый пересчёт — место прокрутки возвращаем сами
     const scrollTop = list.scrollTop;
     list.textContent = "";
+
     dockEl._count.textContent = items.length;
+    dockEl._count.classList.toggle("rhelper-dock-count-over", items.length > IN_PROGRESS_LIMIT);
+
     // Колонок не больше, чем самих номеров: пустые треки держали бы ширину панели
     const columns = Math.max(1, Math.min(items.length, DOCK_COLUMNS));
     list.style.gridTemplateColumns = `repeat(${columns}, minmax(50px, max-content))`;
@@ -1416,13 +1502,17 @@
     dockUpdateTimeout = null;
     if (!dockStateLoaded) return;
     // Панель нужна только при разборе, то есть в режиме редактирования страницы
-    if (dockState.hidden || !isEditorPage()) {
+    if (!isEditorPage()) {
       removeDock();
       return;
     }
 
     const items = collectMyInProgress();
-    if (items.length === 0) {
+    // Напоминание о лимите живёт отдельно от панели: её могли свернуть или закрыть
+    // крестиком, а у закрывших панель разбор как раз копится незаметнее всего
+    checkInProgressLimit(items);
+
+    if (dockState.hidden || items.length === 0) {
       removeDock();
       return;
     }

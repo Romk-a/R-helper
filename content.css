@@ -866,6 +866,69 @@
   border-bottom: none;
 }
 
+/* ===== Напоминание о лимите ячеек в разборе ===== */
+
+/* Внизу по центру — там панель «Мои в разборе» оказывается реже всего: по умолчанию
+   она в правом верхнем углу. Гарантии нет, перетащить её можно и вниз (clampDockPosition()
+   лишь оставляет видимыми DOCK_HEAD_KEEP пикселей), поэтому тост идёт выше по z-index */
+.rhelper-limit-toast {
+  position: fixed;
+  z-index: 999998; /* выше панели, ниже тултипа и попапа; вровень с рамкой ячейки,
+                      но они не пересекаются — тост внизу по центру */
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch; /* кнопка получается ростом в обе строки текста */
+  gap: 14px;
+  max-width: 90vw;
+  padding: 10px 14px;
+  background: #fffae6;
+  border: 1px solid #ffc400;
+  border-left: 4px solid #ffab00;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(9, 30, 66, 0.25);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: #172b4d;
+}
+
+.rhelper-limit-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* По центру относительно текста под ним, а не всего тоста: кнопка в счёт не идёт */
+.rhelper-limit-toast-title {
+  font-weight: 600;
+  text-align: center;
+}
+
+.rhelper-limit-toast-btn {
+  flex: none;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #ffab00;
+  border-radius: 3px;
+  color: #974f0c;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rhelper-limit-toast-btn:hover {
+  background: #fff0b3;
+}
+
+/* Пока ячеек в разборе больше порога, счётчик панели остаётся красным:
+   разовый тост можно закрыть и забыть, постоянный маркер — нет */
+.rhelper-dock-count-over {
+  background: #ffbdad;
+  color: #bf2600;
+}
+
 /* ===== Dark theme adaptation ===== */
 @media (prefers-color-scheme: dark) {
   .rhelper-overlay:not([data-theme="light"]) .rhelper-popup { background: #1e1e1e; color: #e0e0e0; }
@@ -910,6 +973,10 @@
   .rhelper-dock:not([data-theme="light"]) .rhelper-dock-btn:hover { background: #3a3a3a; color: #fff; }
   .rhelper-dock:not([data-theme="light"]) .rhelper-dock-num { color: #79b8ff; background: #2a2a2a; border-color: #444; }
   .rhelper-dock:not([data-theme="light"]) .rhelper-dock-num:hover { background: #1c2d41; border-color: #79b8ff; }
+  .rhelper-dock:not([data-theme="light"]) .rhelper-dock-count-over { background: #5c1f14; color: #ff8f73; }
+  .rhelper-limit-toast:not([data-theme="light"]) { background: #2a2418; border-color: #7a5c00; border-left-color: #ffab00; color: #e0e0e0; }
+  .rhelper-limit-toast:not([data-theme="light"]) .rhelper-limit-toast-btn { border-color: #7a5c00; color: #ffc400; }
+  .rhelper-limit-toast:not([data-theme="light"]) .rhelper-limit-toast-btn:hover { background: #3d3420; }
 }
 
 /* Forced dark theme */
@@ -955,6 +1022,10 @@
 .rhelper-dock[data-theme="dark"] .rhelper-dock-btn:hover { background: #3a3a3a; color: #fff; }
 .rhelper-dock[data-theme="dark"] .rhelper-dock-num { color: #79b8ff; background: #2a2a2a; border-color: #444; }
 .rhelper-dock[data-theme="dark"] .rhelper-dock-num:hover { background: #1c2d41; border-color: #79b8ff; }
+.rhelper-dock[data-theme="dark"] .rhelper-dock-count-over { background: #5c1f14; color: #ff8f73; }
+.rhelper-limit-toast[data-theme="dark"] { background: #2a2418; border-color: #7a5c00; border-left-color: #ffab00; color: #e0e0e0; }
+.rhelper-limit-toast[data-theme="dark"] .rhelper-limit-toast-btn { border-color: #7a5c00; color: #ffc400; }
+.rhelper-limit-toast[data-theme="dark"] .rhelper-limit-toast-btn:hover { background: #3d3420; }
 
 /* ===== Flash animation for scrollToCell ===== */
 @keyframes rhelper-flash-anim {
