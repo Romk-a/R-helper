@@ -370,10 +370,12 @@
   background: #fafafa;
 }
 
+/* Имя и «размер · дата» в одну строку: длинное имя обрезается многоточием,
+   а размер с датой не сжимаются и всегда видны целиком. */
 .rhelper-attachment-info {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
   flex: 1;
 }
@@ -390,6 +392,8 @@
 .rhelper-attachment-size {
   font-size: 11px;
   color: #6b778c;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .rhelper-attachment-download {

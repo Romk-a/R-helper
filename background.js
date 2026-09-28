@@ -752,23 +752,46 @@ async function fetchTestRunResults(testRunKey) {
   }
 }
 
+// Вложения в кэше хранятся в одной форме, какой бы API их ни отдал:
+// { id, name, size, createdOn }. createdOn есть всегда — null, если дата неизвестна;
+// по наличию этого ключа отличаем записи, сохранённые до появления дат.
+function normalizeAttachment(att) {
+  return {
+    id: att.id,
+    name: att.name || att.filename || att.fileName || "unnamed",
+    size: att.fileSize ?? att.filesize ?? null,
+    createdOn: att.createdOn || null,
+  };
+}
+
 async function fetchAttachments(testResultId) {
   ensureConfigured();
 
   const cached = getCached(attachmentsCache, testResultId);
-  if (cached) {
+  if (cached && cached.every((att) => "createdOn" in att)) {
     logCache("ATT_HIT", String(testResultId));
     return cached;
   }
 
-  const url = `${JIRA_BASE}/rest/atm/1.0/testresult/${testResultId}/attachments`;
   try {
-    const resp = await fetch(url, { credentials: "include" });
+    let raw;
+    // Дату загрузки (createdOn) отдаёт только внутреннее API Zephyr. Внимание: там
+    // fileName — это UUID файла на диске, настоящее имя лежит в name.
+    const internalUrl = `${JIRA_BASE}/rest/tests/1.0/testresult/${testResultId}?fields=attachments`;
+    const resp = await fetch(internalUrl, { credentials: "include" });
+    // Внутреннее API не документировано и может сломаться после обновления Zephyr —
+    // тогда берём публичное, вложения останутся без дат. Истёкшая сессия — ошибка сразу.
+    if (resp.status === 401 || resp.status === 403) checkAuthResponse(resp, "");
+    if (resp.ok) raw = (await resp.json().catch(() => null))?.attachments;
+    if (!Array.isArray(raw)) {
+      logCache("ATT_FALLBACK", testResultId + ": internal API " + resp.status);
+      const fallback = await fetch(`${JIRA_BASE}/rest/atm/1.0/testresult/${testResultId}/attachments`, { credentials: "include" });
+      checkAuthResponse(fallback, "Ошибка загрузки вложений");
+      raw = await fallback.json();
+    }
 
-    checkAuthResponse(resp, "Ошибка загрузки вложений");
-
-    const data = await resp.json();
-    logCache("ATT_FETCHED", testResultId + " → " + (Array.isArray(data) ? data.length : 0) + " items");
+    const data = (Array.isArray(raw) ? raw : []).map(normalizeAttachment);
+    logCache("ATT_FETCHED", testResultId + " → " + data.length + " items");
     setCache(attachmentsCache, testResultId, data);
     return data;
   } catch (err) {

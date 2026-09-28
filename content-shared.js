@@ -62,6 +62,16 @@
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  // "2026-09-23T19:12:16.441Z" → "23.09.2026 22:12" (в часовом поясе браузера)
+  function formatAttachmentDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() +
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
   function getStatusClass(status) {
     if (!status) return "rhelper-status-not-executed";
     const s = status.toLowerCase();
@@ -477,9 +487,14 @@
       const list = document.createElement("ul");
       list.className = "rhelper-attachments-list";
 
-      data.attachments.forEach((att) => {
-        const attName = att.fileName || att.filename || att.name || "unnamed";
-        const attSize = att.fileSize || att.size;
+      // Вложения копятся от перезапуска к перезапуску, часто с одинаковыми именами —
+      // свежие сверху. Без даты (запасное API) — в конец, в исходном порядке.
+      const byNewest = data.attachments.slice().sort((a, b) =>
+        (Date.parse(b.createdOn) || 0) - (Date.parse(a.createdOn) || 0));
+
+      byNewest.forEach((att) => {
+        // background приводит вложения к { id, name, size, createdOn } — см. normalizeAttachment()
+        const attName = att.name || "unnamed";
 
         const li = document.createElement("li");
         li.className = "rhelper-attachment-item";
@@ -492,7 +507,9 @@
         nameSpan.textContent = attName;
         const sizeSpan = document.createElement("span");
         sizeSpan.className = "rhelper-attachment-size";
-        sizeSpan.textContent = formatFileSize(attSize);
+        sizeSpan.textContent = [formatFileSize(att.size), formatAttachmentDate(att.createdOn)]
+          .filter(Boolean)
+          .join(" · ");
         info.appendChild(nameSpan);
         info.appendChild(sizeSpan);
 
