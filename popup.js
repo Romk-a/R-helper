@@ -277,20 +277,24 @@
 
   // ===== Page statistics button =====
 
-  document.getElementById("pageStatsBtn").addEventListener("click", async () => {
+  // Одно окно на странице в двух режимах: «Статистика страницы» и «Моя статистика»
+  async function openPageStats(mode) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
       showToast("Нет активной вкладки");
       return;
     }
 
-    const resp = await sendToTab(tab.id, { action: "showPageStats" });
+    const resp = await sendToTab(tab.id, { action: "showPageStats", mode });
     if (!resp || resp.error) {
       showToast(resp?.error || "Откройте страницу с разбором");
       return;
     }
     window.close();
-  });
+  }
+
+  document.getElementById("pageStatsBtn").addEventListener("click", () => openPageStats("all"));
+  document.getElementById("myStatsBtn").addEventListener("click", () => openPageStats("mine"));
 
   // ===== Prefetch button =====
 
