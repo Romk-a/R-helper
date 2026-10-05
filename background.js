@@ -699,7 +699,9 @@ function checkAuthResponse(resp, context) {
   if (resp.status === 401 || resp.status === 403) {
     throw new Error("Сессия истекла. Войдите в Jira и обновите страницу.");
   }
-  throw new Error(`${context}: ${resp.status} ${resp.statusText}`);
+  const err = new Error(`${context}: ${resp.status} ${resp.statusText}`);
+  err.status = resp.status; // по нему вызывающий отличает «не найдено» от прочих сбоев
+  throw err;
 }
 
 // Из результата прогона наружу уходят только три поля (см. handleGetTestResult), а API
@@ -871,7 +873,10 @@ async function handleGetTestCaseResults(testCaseKey, executionKey, includeAttach
   try {
     result = await fetchExecutionResult(executionKey);
   } catch (e) {
-    return { found: false, comment: null, attachments: [], status: null, issueLinks: [] };
+    // «Не найдено» — только когда Jira так и ответила. Истёкшую сессию и сбои сети
+    // отдаём ошибкой, иначе пользователь видел «результат не найден» вместо «войдите в Jira»
+    if (e.status === 404) return { found: false, comment: null, attachments: [], status: null, issueLinks: [] };
+    throw e;
   }
 
   let attachments = [];

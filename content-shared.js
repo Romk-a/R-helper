@@ -34,6 +34,89 @@
     return doc.body.textContent || "";
   }
 
+  // ===== HTML из Zephyr =====
+  //
+  // Комментарии и поля тест-кейса приходят из Zephyr как HTML и вставляются прямо в
+  // страницу Confluence. DOMParser сам скрипты не запускает, но атрибуты-обработчики
+  // (<img onerror>) и javascript:-ссылки срабатывают, едва узел попадает в живой
+  // документ. Поэтому оставляем только разметку текста, без активного содержимого.
+
+  // Удаляются вместе с содержимым
+  const DROP_TAGS = new Set([
+    "script", "style", "iframe", "frame", "frameset", "object", "embed", "applet",
+    "link", "meta", "base", "form", "input", "button", "textarea", "select", "option",
+    "svg", "math", "template", "noscript", "title", "head", "audio", "video", "source",
+    "track", "canvas", "portal",
+  ]);
+
+  // Остаются как есть; всё прочее разворачивается — тег уходит, текст остаётся
+  const ALLOWED_TAGS = new Set([
+    "a", "b", "strong", "i", "em", "u", "s", "strike", "del", "ins", "sub", "sup",
+    "small", "big", "mark", "font", "br", "hr", "p", "div", "span", "pre", "code",
+    "blockquote", "ul", "ol", "li", "dl", "dt", "dd", "h1", "h2", "h3", "h4", "h5", "h6",
+    "table", "caption", "colgroup", "col", "thead", "tbody", "tfoot", "tr", "td", "th", "img",
+  ]);
+
+  const ALLOWED_ATTRS = new Set([
+    "title", "class", "style", "colspan", "rowspan", "align", "valign", "color", "alt",
+    "width", "height",
+  ]);
+
+  // Через style можно растянуть элемент поверх всей страницы или тянуть внешние ресурсы
+  const UNSAFE_STYLE_RE = /position|url\s*\(|expression|behavior|@import/i;
+
+  function isSafeUrl(value, protocols) {
+    try {
+      return protocols.includes(new URL(value, document.baseURI).protocol);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function cleanAttributes(el, tag) {
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase();
+      let keep;
+      if (name === "href") keep = tag === "a" && isSafeUrl(attr.value, ["http:", "https:", "mailto:"]);
+      else if (name === "src") keep = tag === "img" && isSafeUrl(attr.value, ["http:", "https:"]);
+      else if (name === "style") keep = !UNSAFE_STYLE_RE.test(attr.value);
+      else keep = ALLOWED_ATTRS.has(name);
+      if (!keep) el.removeAttribute(attr.name);
+    }
+    if (tag === "a" && el.hasAttribute("href")) {
+      el.setAttribute("target", "_blank");
+      el.setAttribute("rel", "noopener noreferrer");
+    }
+  }
+
+  function cleanNode(parent) {
+    for (const node of [...parent.childNodes]) {
+      if (node.nodeType === Node.COMMENT_NODE) {
+        node.remove();
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      const tag = node.localName.toLowerCase();
+      if (DROP_TAGS.has(tag)) {
+        node.remove();
+        continue;
+      }
+      // Сначала потомки: при разворачивании они поднимутся уже очищенными
+      cleanNode(node);
+      if (ALLOWED_TAGS.has(tag)) cleanAttributes(node, tag);
+      else node.replaceWith(...node.childNodes);
+    }
+  }
+
+  // HTML-строка → DocumentFragment текущего документа, без активного содержимого
+  function sanitizeHtml(html) {
+    const doc = new DOMParser().parseFromString(String(html ?? ""), "text/html");
+    cleanNode(doc.body);
+    const frag = document.createDocumentFragment();
+    while (doc.body.firstChild) frag.appendChild(document.adoptNode(doc.body.firstChild));
+    return frag;
+  }
+
   function extractVmNames(htmlComment) {
     const withNewlines = htmlComment
       .replace(/<br\s*\/?>/gi, "\n")
@@ -461,10 +544,7 @@
     if (data.comment) {
       commentDiv = document.createElement("div");
       commentDiv.className = "rhelper-popup-comment";
-      const commentDoc = new DOMParser().parseFromString(data.comment, "text/html");
-      while (commentDoc.body.firstChild) {
-        commentDiv.appendChild(document.adoptNode(commentDoc.body.firstChild));
-      }
+      commentDiv.appendChild(sanitizeHtml(data.comment));
       linkifyBugsInDom(commentDiv, jiraBase);
       commentSection.appendChild(commentDiv);
     } else {
@@ -627,6 +707,7 @@
     HOVER_DELAY,
     COMMENT_PREVIEW_LENGTH,
     stripHtml,
+    sanitizeHtml,
     extractVmNames,
     formatFileSize,
     getStatusClass,

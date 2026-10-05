@@ -234,15 +234,20 @@
     section.hidden = false;
     countEl.textContent = resp.cells.length;
     listEl.textContent = "";
-    resp.cells.forEach((num, i) => {
+    resp.cells.forEach((cell, i) => {
       if (i > 0) listEl.appendChild(document.createTextNode(", "));
       const link = document.createElement("a");
       link.href = "#";
       link.className = "rhelper-popup-inprogress-link";
-      link.textContent = num;
+      link.textContent = cell.number;
+      link.title = (cell.columnLabel ? cell.columnLabel + " · " : "") + cell.testRunKey;
       link.addEventListener("click", async (e) => {
         e.preventDefault();
-        await chrome.tabs.sendMessage(tab.id, { action: "scrollToCell", cellNumber: num });
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "scrollToCell",
+          cellNumber: cell.number,
+          testRunKey: cell.testRunKey,
+        });
         window.close();
       });
       listEl.appendChild(link);

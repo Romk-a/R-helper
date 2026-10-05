@@ -429,7 +429,8 @@
         labelSpan.textContent = label + ": ";
         div.appendChild(labelSpan);
         const valueSpan = document.createElement("span");
-        valueSpan.innerHTML = value;
+        // Поля Zephyr (Objective и т. п.) — HTML; вставляем только очищенным
+        valueSpan.appendChild(R.sanitizeHtml(value));
         div.appendChild(valueSpan);
         tooltip.appendChild(div);
       }
@@ -450,7 +451,6 @@
   // Цвет «ячейка в разборе»
   const IN_PROGRESS_COLOR = "#ffe380";
   const IN_PROGRESS_SLOT = "ffe380"; // как цвет записан в rhh-классах истории
-  const IN_PROGRESS_SELECTOR = `td[data-highlight-colour="${IN_PROGRESS_COLOR}" i]`;
 
   const PALETTE_COLORS = [
     { color: "#ff8f73", title: "Умеренный красный 65 %" },
@@ -1772,21 +1772,11 @@
     }
 
     if (message.action === "scrollToCell") {
-      const num = message.cellNumber;
-      let target = null;
-
-      function findCell(doc) {
-        if (target) return;
-        const cells = doc.querySelectorAll(IN_PROGRESS_SELECTOR);
-        for (const cell of cells) {
-          if (cell.textContent.trim() === num) { target = cell; return; }
-        }
-      }
-
-      findCell(document);
-      if (!target) forEachIframeDoc(findCell);
-
-      if (target) scrollToCellElement(target);
+      // Один номер повторяется в строке по стендам, поэтому ищем по паре «прогон + номер»
+      // и только среди своих жёлтых — иначе прокрутка уезжала к ячейке коллеги
+      const target = collectMyInProgress().find((item) =>
+        item.number === message.cellNumber && item.testRunKey === message.testRunKey);
+      if (target) scrollToCellElement(target.cell);
       sendResponse({ found: !!target });
     }
 
@@ -1798,7 +1788,14 @@
           return;
         }
         // Тот же источник, что и у панели на странице, — иначе счётчики расходятся
-        sendResponse({ username, cells: collectMyInProgress().map((item) => item.number) });
+        sendResponse({
+          username,
+          cells: collectMyInProgress().map((item) => ({
+            number: item.number,
+            testRunKey: item.testRunKey,
+            columnLabel: item.columnLabel,
+          })),
+        });
       })();
       return true;
     }
