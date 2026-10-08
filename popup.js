@@ -4,6 +4,8 @@
   // Тот же ключ, что DOCK_STATE_KEY в content.js: попап пишет в него видимость
   // плавающей панели и сброс её положения, контент-скрипт слушает изменения
   const DOCK_STATE_KEY = "dockState";
+  // Сколько прогонов предзагрузка запрашивает одновременно
+  const PREFETCH_CONCURRENCY = 4;
 
   async function sendMessage(msg) {
     try {
@@ -332,14 +334,28 @@
       return;
     }
 
+    // Прогоны качаем по PREFETCH_CONCURRENCY одновременно: по одному страница с 16 прогонами
+    // грузилась в разы дольше, а больше 4 параллельных запросов на мегабайт каждый —
+    // уже ощутимая нагрузка на Jira. Запись на диск это не умножает: background
+    // собирает прогоны, пришедшие в течение секунды, в один storage.set.
     let done = 0;
-    for (const key of keys) {
-      done++;
-      setBtnText(prefetchBtn, `Кэширование... (${done}/${keys.length})`);
-      await sendMessage({ action: "prefetchTestRun", testRunKey: key });
-    }
+    let failed = 0;
+    let next = 0;
+    setBtnText(prefetchBtn, `Кэширование... (0/${keys.length})`);
+    const worker = async () => {
+      while (next < keys.length) {
+        const key = keys[next++];
+        const r = await sendMessage({ action: "prefetchTestRun", testRunKey: key });
+        if (!r || r.error) failed++;
+        done++;
+        setBtnText(prefetchBtn, `Кэширование... (${done}/${keys.length})`);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PREFETCH_CONCURRENCY, keys.length) }, worker));
 
-    setBtnText(prefetchBtn, `Закэшировано! ${keys.length} прогонов`);
+    setBtnText(prefetchBtn, failed
+      ? `Готово: ${keys.length - failed} из ${keys.length}, ошибок: ${failed}`
+      : `Закэшировано! ${keys.length} прогонов`);
     await loadStatus();
 
     setTimeout(() => {
