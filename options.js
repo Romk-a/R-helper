@@ -32,6 +32,15 @@
     return value.replace(/\/+$/, "");
   }
 
+  // Ключ проекта Jira: латиница в верхнем регистре, цифры и "_", начинается с буквы.
+  // Частые ошибки ввода исправляем сами: нижний регистр, полный префикс ("BT-T",
+  // "BT-C") или дефис на конце — иначе префикс получался "BT-T-T" и ячейки не находились.
+  const PROJECT_KEY_RE = /^[A-Z][A-Z0-9_]*$/;
+
+  function normalizeProjectKey(value) {
+    return value.trim().toUpperCase().replace(/-[TC]?$/, "");
+  }
+
   function hostPattern(urlStr) {
     try {
       const url = new URL(urlStr);
@@ -64,9 +73,10 @@
 
     const jiraUrl = normalizeUrl(jiraUrlInput.value.trim());
     const confluenceUrl = normalizeUrl(confluenceUrlInput.value.trim());
-    const projectKey = projectKeyInput.value.trim();
+    const projectKey = normalizeProjectKey(projectKeyInput.value);
 
     let hasError = false;
+    let keyError = false;
 
     if (!jiraUrl || !validateUrl(jiraUrl)) {
       jiraUrlInput.classList.add("rhelper-options-input-error");
@@ -76,13 +86,16 @@
       confluenceUrlInput.classList.add("rhelper-options-input-error");
       hasError = true;
     }
-    if (!projectKey) {
+    if (!PROJECT_KEY_RE.test(projectKey)) {
       projectKeyInput.classList.add("rhelper-options-input-error");
       hasError = true;
+      keyError = !!projectKey;
     }
 
     if (hasError) {
-      showStatus("Заполните все поля корректно.", "error");
+      showStatus(keyError
+        ? "Ключ проекта — латинские буквы и цифры, начинается с буквы (например BT)."
+        : "Заполните все поля корректно.", "error");
       return;
     }
 
@@ -108,6 +121,7 @@
 
     jiraUrlInput.value = jiraUrl;
     confluenceUrlInput.value = confluenceUrl;
+    projectKeyInput.value = projectKey;
 
     const settings = { jiraUrl, confluenceUrl, projectKey };
     await chrome.storage.local.set({ settings });
@@ -135,6 +149,23 @@
     testBtn.disabled = true;
     testBtn.textContent = "Проверка...";
 
+    // До первого сохранения доступа к домену Jira ещё нет, и fetch падал с
+    // невнятным "Failed to fetch". Запрашиваем доступ здесь же. Вызов должен идти
+    // до первого await: Firefox разрешает permissions.request только синхронно
+    // в обработчике клика. Если доступ уже выдан, окно не показывается.
+    try {
+      const granted = await chrome.permissions.request({ origins: [hostPattern(jiraUrl)] });
+      if (!granted) {
+        showStatus("Без доступа к Jira проверить подключение нельзя. Разрешите доступ, когда браузер спросит.", "error");
+        resetTestBtn();
+        return;
+      }
+    } catch (e) {
+      showStatus("Ошибка запроса разрешений: " + e.message, "error");
+      resetTestBtn();
+      return;
+    }
+
     try {
       const resp = await fetch(jiraUrl + "/rest/api/2/myself", { credentials: "include" });
       if (resp.ok) {
@@ -146,12 +177,16 @@
         showStatus("Ошибка: " + resp.status + " " + resp.statusText, "error");
       }
     } catch (e) {
-      showStatus("Не удалось подключиться: " + e.message, "error");
+      showStatus("Не удалось подключиться к " + jiraUrl + ". Проверьте адрес и доступ к сети.", "error");
     }
 
+    resetTestBtn();
+  });
+
+  function resetTestBtn() {
     testBtn.disabled = false;
     testBtn.textContent = "Проверить подключение";
-  });
+  }
 
   loadSettings();
 })();
