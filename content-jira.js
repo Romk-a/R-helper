@@ -73,12 +73,8 @@
         jiraBase: JIRA_BASE,
       });
 
-      // Position to the right of the link
-      const rect = link.getBoundingClientRect();
-      tooltip.style.left = (rect.right + 8 + window.scrollX) + "px";
-      tooltip.style.top = (rect.top + window.scrollY) + "px";
-
       document.body.appendChild(tooltip);
+      R.placeTooltip(tooltip, link.getBoundingClientRect());
       currentTooltip = tooltip;
 
       tooltip.addEventListener("mouseenter", () => {

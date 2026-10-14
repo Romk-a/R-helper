@@ -701,6 +701,55 @@
     }
   }
 
+  // ===== Tooltip placement =====
+
+  const TOOLTIP_GAP = 8;    // от якоря до подсказки
+  const TOOLTIP_MARGIN = 8; // от подсказки до края окна
+
+  // Ставит подсказку рядом с якорем так, чтобы она целиком помещалась в окне.
+  // anchorRect — прямоугольник якоря в координатах окна верхнего документа.
+  // Подсказка уже должна быть в DOM: нужен её размер. Порядок мест: справа от якоря,
+  // слева, под ним, над ним; по вертикали и горизонтали — сдвиг внутрь окна.
+  // Раньше подсказка всегда вставала справа, и у правого края уходила за экран,
+  // сжимаясь в узкую колонку.
+  function placeTooltip(tooltip, anchorRect) {
+    const viewW = document.documentElement.clientWidth;
+    const viewH = document.documentElement.clientHeight;
+    const clamp = (value, size, limit) =>
+      Math.max(TOOLTIP_MARGIN, Math.min(value, limit - TOOLTIP_MARGIN - size));
+
+    // Сначала в угол: у края absolute-блок сжимается по ширине и мерить его там нельзя.
+    // Заодно узнаём, куда угол попал на самом деле: координаты absolute-блока считаются
+    // от его контейнера, а у страниц Confluence он бывает сдвинут относительно окна
+    // (подсказка уезжала влево на ~8 px: справа от ячейки — вплотную, слева — с двойным
+    // зазором). Сдвиг (dx, dy) вычитаем из итоговых координат.
+    tooltip.style.left = window.scrollX + "px";
+    tooltip.style.top = window.scrollY + "px";
+    const parked = tooltip.getBoundingClientRect();
+    const dx = parked.left;
+    const dy = parked.top;
+    const w = tooltip.offsetWidth;
+    const h = tooltip.offsetHeight;
+
+    let left;
+    let top;
+    if (anchorRect.right + TOOLTIP_GAP + w <= viewW - TOOLTIP_MARGIN) {
+      left = anchorRect.right + TOOLTIP_GAP;
+      top = clamp(anchorRect.top, h, viewH);
+    } else if (anchorRect.left - TOOLTIP_GAP - w >= TOOLTIP_MARGIN) {
+      left = anchorRect.left - TOOLTIP_GAP - w;
+      top = clamp(anchorRect.top, h, viewH);
+    } else {
+      left = clamp(anchorRect.left, w, viewW);
+      top = anchorRect.bottom + TOOLTIP_GAP + h <= viewH - TOOLTIP_MARGIN
+        ? anchorRect.bottom + TOOLTIP_GAP
+        : clamp(anchorRect.top - TOOLTIP_GAP - h, h, viewH);
+    }
+
+    tooltip.style.left = left - dx + window.scrollX + "px";
+    tooltip.style.top = top - dy + window.scrollY + "px";
+  }
+
   // ===== Export =====
 
   window.RHelper = {
@@ -717,6 +766,7 @@
     removeLightbox,
     hasLightbox,
     buildTooltipContent,
+    placeTooltip,
     createPopupShell,
     renderPopupContent,
     applyThemeToElement,

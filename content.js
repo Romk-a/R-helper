@@ -202,28 +202,29 @@
     }
   }
 
-  function positionTooltip(tooltip, cell) {
+  // Прямоугольник ячейки в координатах окна верхнего документа (ячейка может быть в iframe редактора)
+  function getCellViewportRect(cell) {
     const rect = cell.getBoundingClientRect();
-    let left = rect.right + 8;
-    let top = rect.top;
-
+    let dx = 0;
+    let dy = 0;
     const ownerDoc = cell.ownerDocument;
     if (ownerDoc !== document) {
       const iframe = findIframeFor(ownerDoc);
       if (iframe) {
         const iframeRect = iframe.getBoundingClientRect();
-        left += iframeRect.left;
-        top += iframeRect.top;
+        dx = iframeRect.left;
+        dy = iframeRect.top;
       }
     }
-
-    tooltip.style.left = left + window.scrollX + "px";
-    tooltip.style.top = top + window.scrollY + "px";
+    return {
+      left: rect.left + dx, right: rect.right + dx,
+      top: rect.top + dy, bottom: rect.bottom + dy,
+    };
   }
 
   function mountTooltip(tooltip, cell) {
-    positionTooltip(tooltip, cell);
     document.body.appendChild(tooltip);
+    R.placeTooltip(tooltip, getCellViewportRect(cell));
     currentTooltip = tooltip;
 
     tooltip.addEventListener("mouseenter", () => {
