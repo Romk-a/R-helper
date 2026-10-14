@@ -796,6 +796,64 @@
   filter: brightness(0.92);
 }
 
+/* Сетка номеров неразобранных ячеек. Номер нейтральный, без заливки — как сама ячейка.
+   Лишний .rhelper-popup в селекторе — по той же причине, что у -coloured выше */
+.rhelper-stats-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rhelper-overlay .rhelper-popup .rhelper-stats-cell.rhelper-stats-cell-plain {
+  color: #172b4d;
+  background: #fff;
+  border-color: #c1c7d0;
+}
+
+.rhelper-overlay .rhelper-popup .rhelper-stats-cell.rhelper-stats-cell-plain:hover {
+  background: #f4f5f7;
+}
+
+/* Номер, по которому кликнули последним, — чтобы было видно, где остановился */
+.rhelper-overlay .rhelper-popup .rhelper-stats-cell.rhelper-stats-cell-active {
+  border-color: #2684ff;
+  box-shadow: 0 0 0 1px #2684ff;
+}
+
+.rhelper-stats-group-head-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.rhelper-stats-group-arrow::before {
+  content: "\25BE"; /* ▾ */
+  display: inline-block;
+  width: 10px;
+  font-size: 11px;
+  color: #6b778c;
+}
+
+.rhelper-stats-group-collapsed .rhelper-stats-group-arrow::before {
+  content: "\25B8"; /* ▸ */
+}
+
+.rhelper-stats-group-collapsed .rhelper-stats-chips {
+  display: none;
+}
+
+/* Свёрнутая секция «Не разобрано»: остаётся только заголовок */
+.rhelper-stats-section-collapsed > .rhelper-popup-section-title .rhelper-stats-group-arrow::before {
+  content: "\25B8"; /* ▸ */
+}
+
+.rhelper-stats-section-collapsed > :not(.rhelper-popup-section-title) {
+  display: none;
+}
+
+.rhelper-stats-group-collapsed .rhelper-stats-group-head {
+  margin-bottom: 0;
+}
+
 .rhelper-stats-row-hard {
   flex: none;
   color: #de350b;
@@ -1030,6 +1088,8 @@
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell { color: #ffe082; background: #3e2723; border-color: #ffe380; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell:hover { background: #5d4037; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-active { background: #2f2f2f; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell.rhelper-stats-cell-plain { color: #e0e0e0; background: #2a2a2a; border-color: #555; }
+  .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-cell.rhelper-stats-cell-plain:hover { background: #333; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-column { color: #d0d0d0; background: #3a3a3a; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-comment { color: #ccc; }
   .rhelper-overlay:not([data-theme="light"]) .rhelper-stats-row-comment-empty { color: #888; }
@@ -1088,6 +1148,8 @@
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-cell { color: #ffe082; background: #3e2723; border-color: #ffe380; }
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-cell:hover { background: #5d4037; }
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-row-active { background: #2f2f2f; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-cell.rhelper-stats-cell-plain { color: #e0e0e0; background: #2a2a2a; border-color: #555; }
+.rhelper-overlay[data-theme="dark"] .rhelper-stats-cell.rhelper-stats-cell-plain:hover { background: #333; }
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-row-column { color: #d0d0d0; background: #3a3a3a; }
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-row-comment { color: #ccc; }
 .rhelper-overlay[data-theme="dark"] .rhelper-stats-row-comment-empty { color: #888; }

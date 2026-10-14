@@ -901,6 +901,12 @@
 
       const commentCol = findCommentColumn(table);
       const firstDataRow = subHeader ? 2 : 1;
+      // Заголовок таблицы («FAIL KSZ», «BLOCK UPD») стоит в шапке прямо над «Комментариями».
+      // Нужен для группировки неразобранных, когда строка стендов пустая.
+      const tableTitle = commentCol && commentCol.row > 0
+        ? getRowComment(table.rows[commentCol.row - 1], commentCol.index)
+        : "";
+      const tableIdx = stats.tableCount++;
 
       for (let r = firstDataRow; r < table.rows.length; r++) {
         for (const cell of table.rows[r].children) {
@@ -915,7 +921,10 @@
 
           const colour = (cell.getAttribute("data-highlight-colour") || "").toLowerCase();
           if (!colour) {
-            stats.unpainted++;
+            // colIdx — чтобы стенды в списке шли в том же порядке, что колонки на странице
+            stats.unpainted.push({
+              cell, number: num, testRunKey, columnLabel: colLabels[colIdx] || "", tableTitle, colIdx, tableIdx,
+            });
             continue;
           }
 
@@ -943,7 +952,7 @@
   }
 
   function collectPageStatsAll() {
-    const stats = { total: 0, unpainted: 0, done: 0, inProgress: [], painted: [], runKeys: new Set() };
+    const stats = { total: 0, tableCount: 0, unpainted: [], done: 0, inProgress: [], painted: [], runKeys: new Set() };
     collectPageStats(document, stats);
     forEachIframeDoc((doc) => collectPageStats(doc, stats));
     return stats;
@@ -1003,14 +1012,16 @@
     return text.length > limit ? text.slice(0, limit).trimEnd() + "…" : text;
   }
 
-  // Помечает строку, по которой кликнули. Снимаем метку по всему попапу, а не только
-  // внутри своей группы художника — иначе в каждой группе останется по подсвеченной строке.
+  // Помечает строку (или номер в сетке неразобранных), по которой кликнули. Снимаем метку
+  // по всему попапу, а не только внутри своей группы — иначе в каждой группе останется по метке.
   function markActiveRow(row) {
     const scope = row.closest(".rhelper-popup-body") || row.parentElement;
-    for (const el of scope.querySelectorAll(".rhelper-stats-row-active")) {
-      el.classList.remove("rhelper-stats-row-active");
+    for (const el of scope.querySelectorAll(".rhelper-stats-row-active, .rhelper-stats-cell-active")) {
+      el.classList.remove("rhelper-stats-row-active", "rhelper-stats-cell-active");
     }
-    row.classList.add("rhelper-stats-row-active");
+    row.classList.add(row.classList.contains("rhelper-stats-cell")
+      ? "rhelper-stats-cell-active"
+      : "rhelper-stats-row-active");
   }
 
   // На время вспышки делает попап полупрозрачным, чтобы под ним была видна ячейка
@@ -1095,6 +1106,113 @@
     return row;
   }
 
+  // Больше стольких неразобранных — секция и группы в ней открываются свёрнутыми,
+  // чтобы длинная сетка номеров не уталкивала секцию «В разборе» вниз.
+  const UNPAINTED_COLLAPSE_LIMIT = 10;
+
+  // Группа неразобранной ячейки: стенд, если в шапке есть строка стендов; иначе заголовок
+  // таблицы (таблицы с одинаковым заголовком сливаются в одну группу); иначе ключ прогона.
+  // order — порядок групп: стенды по колонкам, таблицы — как идут на странице.
+  function unpaintedGroupOf(item) {
+    if (item.columnLabel) return { key: item.columnLabel, order: [0, item.colIdx] };
+    if (item.tableTitle) return { key: item.tableTitle, order: [1, item.tableIdx] };
+    return { key: item.testRunKey, order: [2, item.tableIdx, item.colIdx] };
+  }
+
+  function compareOrder(a, b) {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const diff = (a[i] || 0) - (b[i] || 0);
+      if (diff) return diff;
+    }
+    return 0;
+  }
+
+  // Неразобранные ячейки по группам (см. unpaintedGroupOf): у них нет ни времени, ни хозяина,
+  // ни (обычно) комментария, поэтому вместо строк — плотная сетка номеров, внутри группы
+  // сверху вниз, как в таблице.
+  function buildUnpaintedSection(items) {
+    const section = document.createElement("div");
+    section.className = "rhelper-popup-section";
+    const title = document.createElement("div");
+    title.className = "rhelper-popup-section-title";
+    title.textContent = "Не разобрано — " + items.length;
+    section.appendChild(title);
+
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "rhelper-popup-empty";
+      empty.textContent = "Все ячейки разобраны или в разборе.";
+      section.appendChild(empty);
+      return section;
+    }
+
+    const collapsed = items.length > UNPAINTED_COLLAPSE_LIMIT;
+    // Сам заголовок секции — тоже раскрывающийся список
+    const titleArrow = document.createElement("span");
+    titleArrow.className = "rhelper-stats-group-arrow";
+    title.prepend(titleArrow);
+    title.classList.add("rhelper-stats-group-head-toggle");
+    title.title = "Свернуть / развернуть";
+    title.addEventListener("click", () => section.classList.toggle("rhelper-stats-section-collapsed"));
+    if (collapsed) section.classList.add("rhelper-stats-section-collapsed");
+
+    const groups = new Map();
+    for (const item of items) {
+      const { key, order } = unpaintedGroupOf(item);
+      if (!groups.has(key)) groups.set(key, { order, items: [] });
+      const group = groups.get(key);
+      if (compareOrder(order, group.order) < 0) group.order = order;
+      group.items.push(item);
+    }
+    const sortedGroups = [...groups.entries()]
+      .sort((a, b) => compareOrder(a[1].order, b[1].order) || a[0].localeCompare(b[0], "ru"));
+
+    for (const [label, { items: groupItems }] of sortedGroups) {
+      const group = document.createElement("div");
+      group.className = "rhelper-stats-group";
+      if (collapsed) group.classList.add("rhelper-stats-group-collapsed");
+
+      const head = document.createElement("div");
+      head.className = "rhelper-stats-group-head rhelper-stats-group-head-toggle";
+      head.title = "Свернуть / развернуть";
+      const arrow = document.createElement("span");
+      arrow.className = "rhelper-stats-group-arrow";
+      const nameEl = document.createElement("span");
+      nameEl.className = "rhelper-stats-painter";
+      nameEl.textContent = label;
+      const countEl = document.createElement("span");
+      countEl.className = "rhelper-stats-painter-count";
+      countEl.textContent = groupItems.length;
+      head.appendChild(arrow);
+      head.appendChild(nameEl);
+      head.appendChild(countEl);
+      head.addEventListener("click", () => group.classList.toggle("rhelper-stats-group-collapsed"));
+      group.appendChild(head);
+
+      const chips = document.createElement("div");
+      chips.className = "rhelper-stats-chips";
+      for (const item of groupItems) {
+        const chip = document.createElement("a");
+        chip.className = "rhelper-stats-cell rhelper-stats-cell-plain";
+        chip.href = "#";
+        chip.textContent = item.number;
+        const place = item.columnLabel || item.tableTitle;
+        chip.title = (place ? place + " · " : "") + item.testRunKey + " — показать ячейку на странице";
+        chip.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          markActiveRow(chip);
+          peekAtPage();
+          scrollToCellElement(item.cell);
+        });
+        chips.appendChild(chip);
+      }
+      group.appendChild(chips);
+      section.appendChild(group);
+    }
+    return section;
+  }
+
   function renderPageStats(body, stats) {
     body.textContent = "";
 
@@ -1109,10 +1227,11 @@
     const grid = document.createElement("div");
     grid.className = "rhelper-stats-grid";
     grid.appendChild(buildStatTile(stats.total, "Всего ячеек", "", "Все ячейки с номерами тест-кейсов в колонках прогонов"));
-    grid.appendChild(buildStatTile(stats.unpainted, "Не разобрано", "rhelper-stat-tile-plain", "Ячейки без заливки"));
+    grid.appendChild(buildStatTile(stats.unpainted.length, "Не разобрано", "rhelper-stat-tile-plain", "Ячейки без заливки"));
     grid.appendChild(buildStatTile(stats.inProgress.length, "В разборе", "rhelper-stat-tile-progress", "Ячейки, закрашенные жёлтым"));
     grid.appendChild(buildStatTile(stats.done, "Разобрано", "rhelper-stat-tile-done", "Ячейки, закрашенные любым цветом, кроме жёлтого"));
     body.appendChild(grid);
+    body.appendChild(buildUnpaintedSection(stats.unpainted));
 
     const section = document.createElement("div");
     section.className = "rhelper-popup-section";
